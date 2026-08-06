@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "PAP",
+    "PBP",
+    " P "
+  ],
+  "key": {
+    "P": { "item": "minecraft:paper" },
+    "A": { "item": "minecraft:lapis_block" },
+    "B": { "item": "minecraft:book" }
+  },
+  "result": {
+    "item": "zzq_survival_toolbox:enchantment_bag",
+    "count": 1
+  }
+}

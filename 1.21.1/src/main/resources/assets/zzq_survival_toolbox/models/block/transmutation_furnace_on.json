@@ -1,0 +1,39 @@
+{
+  "parent": "block/block",
+  "render_type": "translucent",
+  "textures": {
+    "particle": "minecraft:block/blast_furnace_front_on",
+    "front": "minecraft:block/blast_furnace_front_on",
+    "side": "minecraft:block/blast_furnace_side",
+    "top": "minecraft:block/blast_furnace_top",
+    "glass": "minecraft:block/orange_stained_glass"
+  },
+  "elements": [
+    {
+      "from": [0.1, 0.1, 0.1],
+      "to": [15.9, 15.9, 15.9],
+      "faces": {
+        "north": { "uv": [0.1, 0.1, 15.9, 15.9], "texture": "#front", "cullface": "north" },
+        "south": { "uv": [0.1, 0.1, 15.9, 15.9], "texture": "#side", "cullface": "south" },
+        "east":  { "uv": [0.1, 0.1, 15.9, 15.9], "texture": "#side", "cullface": "east" },
+        "west":  { "uv": [0.1, 0.1, 15.9, 15.9], "texture": "#side", "cullface": "west" },
+        "up":    { "uv": [0.1, 0.1, 15.9, 15.9], "texture": "#top", "cullface": "up" },
+        "down":  { "uv": [0.1, 0.1, 15.9, 15.9], "texture": "#top", "cullface": "down" }
+      }
+    },
+    {
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "shade": false,
+      "double_side": true,
+      "faces": {
+        "north": { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "south": { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "east":  { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "west":  { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "up":    { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "down":  { "uv": [0, 0, 16, 16], "texture": "#glass" }
+      }
+    }
+  ]
+}

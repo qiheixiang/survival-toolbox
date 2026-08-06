@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "zzq_survival_toolbox:disassemble_table"
+    },
+    {
+      "item": "minecraft:map"
+    }
+  ],
+  "result": {
+    "id": "zzq_survival_toolbox:terrain_editor",
+    "count": 1
+  }
+}

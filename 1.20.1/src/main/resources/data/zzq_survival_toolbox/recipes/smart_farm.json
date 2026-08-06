@@ -1,0 +1,33 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "HGW",
+    "BFB",
+    "DDD"
+  ],
+  "key": {
+    "D": {
+      "item": "minecraft:dirt"
+    },
+    "W": {
+      "item": "minecraft:water_bucket"
+    },
+    "B": {
+      "item": "minecraft:barrel"
+    },
+    "H": {
+      "item": "minecraft:iron_hoe"
+    },
+    "F": {
+      "item": "minecraft:hopper"
+    },
+    "G": {
+      "item": "minecraft:green_stained_glass"
+    }
+  },
+  "result": {
+    "item": "zzq_survival_toolbox:smart_farm",
+    "count": 1
+  }
+}

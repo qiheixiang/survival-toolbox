@@ -1,0 +1,42 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "ABC",
+    "DSH",
+    "EFG"
+  ],
+  "key": {
+    "A": {
+      "item": "minecraft:lapis_block"
+    },
+    "B": {
+      "item": "minecraft:gold_block"
+    },
+    "C": {
+      "item": "minecraft:redstone_block"
+    },
+    "D": {
+      "item": "minecraft:emerald_block"
+    },
+    "S": {
+      "item": "minecraft:stick"
+    },
+    "E": {
+      "item": "minecraft:amethyst_block"
+    },
+    "F": {
+      "item": "minecraft:glowstone"
+    },
+    "G": {
+      "item": "minecraft:obsidian"
+    },
+    "H": {
+      "item": "minecraft:soul_sand"
+    }
+  },
+  "result": {
+    "id": "zzq_survival_toolbox:disarm_staff",
+    "count": 1
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "facing=north,has_item=false": { "model": "zzq_survival_toolbox:block/infinite_source_empty" },
+    "facing=south,has_item=false": { "model": "zzq_survival_toolbox:block/infinite_source_empty", "y": 180 },
+    "facing=west,has_item=false": { "model": "zzq_survival_toolbox:block/infinite_source_empty", "y": 270 },
+    "facing=east,has_item=false": { "model": "zzq_survival_toolbox:block/infinite_source_empty", "y": 90 },
+    "facing=north,has_item=true": { "model": "zzq_survival_toolbox:block/infinite_source" },
+    "facing=south,has_item=true": { "model": "zzq_survival_toolbox:block/infinite_source", "y": 180 },
+    "facing=west,has_item=true": { "model": "zzq_survival_toolbox:block/infinite_source", "y": 270 },
+    "facing=east,has_item=true": { "model": "zzq_survival_toolbox:block/infinite_source", "y": 90 }
+  }
+}

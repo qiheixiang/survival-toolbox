@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "BBB",
+    "BDB",
+    "BBB"
+  ],
+  "key": {
+    "B": { "item": "minecraft:blast_furnace" },
+    "D": { "item": "zzq_survival_toolbox:disassemble_table" }
+  },
+  "result": {
+    "id": "zzq_survival_toolbox:transmutation_furnace",
+    "count": 1
+  }
+}

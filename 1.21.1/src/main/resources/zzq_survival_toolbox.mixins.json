@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.zzq.survival_toolbox.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "refmap": "zzq_survival_toolbox.refmap.json",
+  "mixins": [
+    "LivingEntityMixin",
+    "EntityMixin",
+    "ItemStackMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

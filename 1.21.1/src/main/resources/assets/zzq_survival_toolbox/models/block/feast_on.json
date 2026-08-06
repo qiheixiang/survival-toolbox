@@ -1,0 +1,10 @@
+{
+  "parent": "block/campfire",
+  "render_type": "translucent",
+  "textures": {
+    "particle": "minecraft:block/oak_log",
+    "log": "minecraft:block/oak_log",
+    "fire": "minecraft:block/campfire_fire",
+    "lit_log": "minecraft:block/campfire_log_lit"
+  }
+}

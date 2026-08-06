@@ -1,0 +1,24 @@
+{
+  "parent": "block/block",
+  "render_type": "translucent",
+  "textures": {
+    "particle": "minecraft:block/glass",
+    "glass": "minecraft:block/glass"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "shade": false,
+      "double_side": true,
+      "faces": {
+        "north": { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "south": { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "east":  { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "west":  { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "up":    { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "down":  { "uv": [0, 0, 16, 16], "texture": "#glass" }
+      }
+    }
+  ]
+}

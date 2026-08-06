@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "zzq_survival_toolbox:block/omni_hopper" },
+    "facing=south": { "model": "zzq_survival_toolbox:block/omni_hopper", "y": 180 },
+    "facing=west": { "model": "zzq_survival_toolbox:block/omni_hopper", "y": 270 },
+    "facing=east": { "model": "zzq_survival_toolbox:block/omni_hopper", "y": 90 }
+  }
+}

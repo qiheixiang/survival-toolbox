@@ -1,0 +1,53 @@
+{
+  "parent": "block/block",
+  "render_type": "translucent",
+  "textures": {
+    "particle": "minecraft:block/glass",
+    "glass": "minecraft:block/glass",
+    "hopper_inside": "minecraft:block/hopper_inside",
+    "hopper_outside": "minecraft:block/hopper_outside",
+    "hopper_top": "minecraft:block/hopper_top"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "shade": false,
+      "double_side": true,
+      "faces": {
+        "north": { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "south": { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "east":  { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "west":  { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "up":    { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "down":  { "uv": [0, 0, 16, 16], "texture": "#glass" }
+      }
+    },
+    {
+      "from": [3, 4, 3],
+      "to": [13, 12, 13],
+      "double_side": true,
+      "faces": {
+        "north": { "uv": [3, 4, 13, 12], "texture": "#hopper_outside" },
+        "south": { "uv": [3, 4, 13, 12], "texture": "#hopper_outside" },
+        "east":  { "uv": [3, 4, 13, 12], "texture": "#hopper_outside" },
+        "west":  { "uv": [3, 4, 13, 12], "texture": "#hopper_outside" },
+        "up":    { "uv": [3, 3, 13, 13], "texture": "#hopper_top" },
+        "down":  { "uv": [3, 3, 13, 13], "texture": "#hopper_inside" }
+      }
+    },
+    {
+      "from": [5, 6, 13],
+      "to": [11, 10, 16],
+      "double_side": true,
+      "faces": {
+        "north": { "uv": [5, 6, 11, 10], "texture": "#hopper_outside" },
+        "south": { "uv": [5, 6, 11, 10], "texture": "#hopper_outside" },
+        "east":  { "uv": [5, 6, 11, 10], "texture": "#hopper_outside" },
+        "west":  { "uv": [5, 6, 11, 10], "texture": "#hopper_outside" },
+        "up":    { "uv": [5, 5, 11, 11], "texture": "#hopper_top" },
+        "down":  { "uv": [5, 5, 11, 11], "texture": "#hopper_inside" }
+      }
+    }
+  ]
+}

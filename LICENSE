@@ -1,0 +1,10 @@
+Survival Toolbox 生存工具箱
+
+<!-- 请替换为你选择的许可证文本。
+请选择许可证：例如 MIT / GPL-3.0 / LGPL-3.0 / All Rights Reserved 等。
+常见选择见 https://choosealicense.com/ -->
+
+TODO: 在此填写你的许可证条款。
+
+（原 gradle.properties 中 mod_license 默认是 "All Rights Reserved"，
+如果你想真正开源，建议选一个 OSS 许可证并同步更新 mod_license。）

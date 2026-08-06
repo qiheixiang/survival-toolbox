@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    { "item": "minecraft:map" },
+    { "item": "minecraft:redstone" },
+    { "item": "minecraft:paper" }
+  ],
+  "result": {
+    "id": "zzq_survival_toolbox:blacklist",
+    "count": 1
+  }
+}

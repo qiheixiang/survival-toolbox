@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "WDM"
+  ],
+  "key": {
+    "W": {
+      "item": "minecraft:water_bucket"
+    },
+    "D": {
+      "item": "zzq_survival_toolbox:disassemble_table"
+    },
+    "M": {
+      "item": "minecraft:lava_bucket"
+    }
+  },
+  "result": {
+    "item": "zzq_survival_toolbox:infinite_source",
+    "count": 1
+  }
+}

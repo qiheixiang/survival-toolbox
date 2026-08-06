@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "lit=false": { "model": "zzq_survival_toolbox:block/feast_off" },
+    "lit=true": { "model": "zzq_survival_toolbox:block/feast_on" }
+  }
+}

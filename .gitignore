@@ -1,0 +1,26 @@
+# Gradle
+.gradle/
+build/
+!**/src/**/build/
+
+# 游戏运行数据（世界、日志、配置）
+run/
+run-data/
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+out/
+
+# 日志
+*.log
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 本地仓库
+repo/

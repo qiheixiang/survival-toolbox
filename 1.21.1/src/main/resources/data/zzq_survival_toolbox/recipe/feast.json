@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "CGC",
+    "GAG",
+    "CGC"
+  ],
+  "key": {
+    "C": { "item": "minecraft:campfire" },
+    "G": { "item": "minecraft:golden_apple" },
+    "A": { "item": "minecraft:soul_campfire" }
+  },
+  "result": {
+    "id": "zzq_survival_toolbox:feast",
+    "count": 1
+  }
+}

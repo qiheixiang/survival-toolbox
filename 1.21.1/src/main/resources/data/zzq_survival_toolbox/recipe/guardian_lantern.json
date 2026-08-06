@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "LDL",
+    "LSL",
+    "LLL"
+  ],
+  "key": {
+    "L": { "item": "minecraft:lantern" },
+    "D": { "item": "minecraft:diamond_sword" },
+    "S": { "item": "minecraft:soul_lantern" }
+  },
+  "result": {
+    "id": "zzq_survival_toolbox:guardian_lantern",
+    "count": 1
+  }
+}

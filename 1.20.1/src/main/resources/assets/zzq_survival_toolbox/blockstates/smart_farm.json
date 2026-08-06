@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "zzq_survival_toolbox:block/smart_farm" },
+    "facing=south": { "model": "zzq_survival_toolbox:block/smart_farm", "y": 180 },
+    "facing=west": { "model": "zzq_survival_toolbox:block/smart_farm", "y": 270 },
+    "facing=east": { "model": "zzq_survival_toolbox:block/smart_farm", "y": 90 }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "parent": "block/block",
+  "render_type": "cutout",
+  "textures": {
+    "particle": "minecraft:block/iron_bars",
+    "bar": "minecraft:block/iron_bars"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 0], "to": [16, 16, 1],
+      "double_side": true,
+      "faces": { "north": {"uv": [0, 0, 16, 16], "texture": "#bar"} }
+    },
+    {
+      "from": [0, 0, 15], "to": [16, 16, 16],
+      "double_side": true,
+      "faces": { "south": {"uv": [0, 0, 16, 16], "texture": "#bar"} }
+    },
+    {
+      "from": [0, 0, 0], "to": [1, 16, 16],
+      "double_side": true,
+      "faces": { "west": {"uv": [0, 0, 16, 16], "texture": "#bar"} }
+    },
+    {
+      "from": [15, 0, 0], "to": [16, 16, 16],
+      "double_side": true,
+      "faces": { "east": {"uv": [0, 0, 16, 16], "texture": "#bar"} }
+    },
+    {
+      "from": [0, 0, 0], "to": [16, 1, 16],
+      "double_side": true,
+      "faces": { "down": {"uv": [0, 0, 16, 16], "texture": "#bar"} }
+    },
+    {
+      "from": [0, 15, 0], "to": [16, 16, 16],
+      "double_side": true,
+      "faces": { "up": {"uv": [0, 0, 16, 16], "texture": "#bar"} }
+    }
+  ]
+}

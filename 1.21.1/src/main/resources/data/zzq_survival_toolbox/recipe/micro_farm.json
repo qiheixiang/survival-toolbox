@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "BBB",
+    "BAB",
+    "BBB"
+  ],
+  "key": {
+    "B": {
+      "item": "minecraft:iron_bars"
+    },
+    "A": {
+      "item": "zzq_survival_toolbox:anvil_orb"
+    }
+  },
+  "result": {
+    "id": "zzq_survival_toolbox:micro_farm",
+    "count": 1
+  }
+}

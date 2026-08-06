@@ -1,0 +1,37 @@
+{
+  "parent": "block/block",
+  "render_type": "translucent",
+  "textures": {
+    "particle": "minecraft:block/crying_obsidian",
+    "core": "minecraft:block/crying_obsidian",
+    "glass": "minecraft:block/blue_stained_glass"
+  },
+  "elements": [
+    {
+      "from": [1, 1, 1],
+      "to": [15, 15, 15],
+      "faces": {
+        "north": { "uv": [1, 1, 15, 15], "texture": "#core" },
+        "south": { "uv": [1, 1, 15, 15], "texture": "#core" },
+        "east":  { "uv": [1, 1, 15, 15], "texture": "#core" },
+        "west":  { "uv": [1, 1, 15, 15], "texture": "#core" },
+        "up":    { "uv": [1, 1, 15, 15], "texture": "#core" },
+        "down":  { "uv": [1, 1, 15, 15], "texture": "#core" }
+      }
+    },
+    {
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "shade": false,
+      "double_side": true,
+      "faces": {
+        "north": { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "south": { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "east":  { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "west":  { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "up":    { "uv": [0, 0, 16, 16], "texture": "#glass" },
+        "down":  { "uv": [0, 0, 16, 16], "texture": "#glass" }
+      }
+    }
+  ]
+}

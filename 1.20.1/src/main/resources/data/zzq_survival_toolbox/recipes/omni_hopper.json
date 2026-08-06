@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "GSG",
+    "SHS",
+    "GSG"
+  ],
+  "key": {
+    "G": { "item": "minecraft:glass" },
+    "S": { "item": "minecraft:iron_ingot" },
+    "H": { "item": "minecraft:hopper" }
+  },
+  "result": {
+    "item": "zzq_survival_toolbox:omni_hopper",
+    "count": 1
+  }
+}
