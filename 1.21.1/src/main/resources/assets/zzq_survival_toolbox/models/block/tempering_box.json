@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "zzq_survival_toolbox:block/tempering_box"
+  }
+}

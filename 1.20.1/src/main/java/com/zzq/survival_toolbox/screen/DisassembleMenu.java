@@ -68,9 +68,12 @@ public class DisassembleMenu extends AbstractContainerMenu {
     /**
      * 全局配方索引：按"输出物品"和"材料物品"双向索引配方。
      * 在后台线程异步构建，交互时只查缓存，绝不在服务器线程上全量扫描配方，
-     * 否则大整合包（上万配方）会卡死服务器几十秒。
+     * 否则大整合包（上万配方）会阻塞服务器线程数十秒。
      */
     private static final java.util.concurrent.ConcurrentMap<Item, List<Recipe<?>>> RECIPES_BY_OUTPUT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** 按"物品|NBT 标识（tacz GunId）"精确索引输出配方：枪械等"同物品不同 NBT 区分"的物品能精确找到自己的配方 */
+    private static final java.util.concurrent.ConcurrentMap<String, List<Recipe<?>>> RECIPES_BY_OUTPUT_DETAIL =
             new java.util.concurrent.ConcurrentHashMap<>();
     private static final java.util.concurrent.ConcurrentMap<Item, List<Recipe<?>>> RECIPES_BY_INGREDIENT =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -446,6 +449,122 @@ public class DisassembleMenu extends AbstractContainerMenu {
         return ItemStack.EMPTY;
     }
 
+    /**
+     * 生成合成产物：优先调用配方的 assemble 组装（保留输入物品的 NBT 状态，
+     * 如精妙背包等模组的升级配方、锻造台配方的附魔保留），无法组装时退回静态输出，
+     * 并回退复制"同物品类型"输入的状态（排除耐久，避免修复类配方反向保留损坏值）。
+     * <p>
+     * 必须在消耗材料（tryConsumeIngredients）之前调用，输入取自九宫格副本。
+     * </p>
+     */
+    private ItemStack assembleRecipeOutput(Recipe<?> recipe, RegistryAccess access) {
+        try {
+            if (recipe instanceof CraftingRecipe crafting) {
+                TransientCraftingContainer input = new TransientCraftingContainer(this, 3, 3);
+                for (int i = 1; i <= 9; i++) {
+                    input.setItem(i - 1, container.getItem(i).copy());
+                }
+                ItemStack assembled = crafting.assemble(input, access);
+                if (!assembled.isEmpty()) {
+                    copyStateFromMatchingInput(assembled);
+                    return assembled;
+                }
+            } else if (recipe instanceof SmithingRecipe smithing) {
+                ItemStack assembled = assembleSmithingOutput(smithing, access);
+                if (!assembled.isEmpty()) {
+                    copyStateFromMatchingInput(assembled);
+                    return assembled;
+                }
+            }
+        } catch (Exception ignored) {
+            // 部分模组配方组装异常时退回静态输出
+        }
+
+        // 回退方案 1：非 CraftingRecipe/SmithingRecipe 但可接受九宫格输入的配方
+        //（如精妙背包等模组的自定义升级配方，其 assemble 自带状态/物品保留逻辑）
+        ItemStack assembled = assembleAnyRecipe(recipe, access);
+        if (!assembled.isEmpty()) return assembled;
+
+        // 回退方案 2：非标准配方类型中，若输出与某个输入为同一种物品（"自身升级"类配方），
+        // 把该输入的状态复制到产物，保证合成后状态不丢失。
+        ItemStack result = getRecipeOutput(recipe, access);
+        if (result.isEmpty()) return result;
+        for (int i = 1; i <= 9; i++) {
+            ItemStack s = container.getItem(i);
+            if (s.isEmpty() || s.getItem() != result.getItem()) continue;
+            copyState(s, result);
+            break;
+        }
+        return result;
+    }
+
+    /**
+     * 锻造配方组装：按 模板/基础/材料 槽位从九宫格匹配输入并调用 assemble，
+     * 保留基础物品的附魔/NBT（与原版锻造台一致）。匹配不齐时返回空。
+     */
+    private ItemStack assembleSmithingOutput(SmithingRecipe smithing, RegistryAccess access) {
+        List<Ingredient> smithIngs = getIngredientsFromRecipe(smithing);
+        if (smithIngs.size() < 3) return ItemStack.EMPTY;
+        boolean[] used = new boolean[9];
+        ItemStack[] ordered = new ItemStack[3];
+        for (int slot = 0; slot < 3; slot++) {
+            Ingredient ing = smithIngs.get(slot);
+            for (int i = 1; i <= 9; i++) {
+                if (used[i - 1]) continue;
+                ItemStack s = container.getItem(i);
+                if (!s.isEmpty() && ing.test(s)) {
+                    used[i - 1] = true;
+                    ordered[slot] = s.copy();
+                    break;
+                }
+            }
+            if (ordered[slot] == null) return ItemStack.EMPTY;
+        }
+        SimpleContainer input = new SimpleContainer(3);
+        input.setItem(0, ordered[0]);
+        input.setItem(1, ordered[1]);
+        input.setItem(2, ordered[2]);
+        return smithing.assemble(input, access);
+    }
+
+    /** 复制输入物品的状态（NBT）到产物，排除耐久键 */
+    private static void copyState(ItemStack from, ItemStack to) {
+        if (from.hasTag()) {
+            CompoundTag tag = from.getTag().copy();
+            tag.remove("Damage");
+            to.setTag(tag);
+        }
+    }
+
+    /** 合成产物与某输入为同种物品（含容器类，如精妙背包升级）时，复制该输入的状态到产物 */
+    private void copyStateFromMatchingInput(ItemStack result) {
+        for (int i = 1; i <= 9; i++) {
+            ItemStack s = container.getItem(i);
+            if (s.isEmpty() || s.getItem() != result.getItem()) continue;
+            copyState(s, result);
+            break;
+        }
+    }
+
+    /** 对任意配方尝试用九宫格输入调用其自身 assemble（模组自定义配方的状态保留逻辑） */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private ItemStack assembleAnyRecipe(Recipe<?> recipe, RegistryAccess access) {
+        try {
+            TransientCraftingContainer input = new TransientCraftingContainer(this, 3, 3);
+            for (int i = 1; i <= 9; i++) {
+                input.setItem(i - 1, container.getItem(i).copy());
+            }
+            ItemStack assembled = ((Recipe) recipe).assemble(input, access);
+            if (!assembled.isEmpty()) {
+                copyStateFromMatchingInput(assembled);
+                return assembled;
+            }
+        } catch (Exception ignored) {
+            // 配方输入类型不匹配时跳过，退回静态输出
+        }
+        return ItemStack.EMPTY;
+    }
+
     private static List<Ingredient> getIngredientsFromRecipe(Object recipeOrData) {
         if (!(recipeOrData instanceof Recipe<?> recipe)) return Collections.emptyList();
         if (UNREADABLE_RECIPE_TYPES.contains(recipe.getClass())) return Collections.emptyList();
@@ -460,11 +579,31 @@ public class DisassembleMenu extends AbstractContainerMenu {
         }
         if (!ings.isEmpty()) return ings.stream().filter(i -> !i.isEmpty()).collect(Collectors.toList());
 
+        // tacz 枪匠台配方：不实现 getIngredients()，材料在 getInputs()（List<GunSmithTableIngredient{Ingredient,count}>）
+        if (recipe.getClass().getName().equals("com.tacz.guns.crafting.GunSmithTableRecipe")) {
+            List<Ingredient> result = new ArrayList<>();
+            try {
+                Object inputs = recipe.getClass().getMethod("getInputs").invoke(recipe);
+                if (inputs instanceof java.util.List<?> list) {
+                    for (Object inp : list) {
+                        if (inp == null) continue;
+                        Object ing = inp.getClass().getMethod("getIngredient").invoke(inp);
+                        Object cnt = inp.getClass().getMethod("getCount").invoke(inp);
+                        int count = cnt instanceof Number n ? n.intValue() : 1;
+                        if (!(ing instanceof Ingredient igin) || igin.isEmpty()) continue;
+                        for (int i = 0; i < count; i++) result.add(igin);
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            if (!result.isEmpty()) return result;
+        }
+
         if (recipe instanceof BrewingRecipe br) {
             return Arrays.asList(br.getInput(), br.getIngredient());
         }
 
-        // 锻造配方暴力提取
+        // 锻造配方材料强制提取
         if (recipe instanceof SmithingTransformRecipe || recipe instanceof SmithingTrimRecipe) {
             List<Ingredient> result = new ArrayList<>();
             String[] fieldNames = {"template", "base", "addition", "left", "right", "middle", "input1", "input2", "input3"};
@@ -474,7 +613,6 @@ public class DisassembleMenu extends AbstractContainerMenu {
                     f.setAccessible(true);
                     Object val = f.get(recipe);
                     if (val instanceof Ingredient ing) result.add(ing);
-                    else if (val instanceof ItemStack s && !s.isEmpty()) result.add(Ingredient.of(s));
                 } catch (NoSuchFieldException | IllegalAccessException ignored) {
                 }
             }
@@ -482,9 +620,14 @@ public class DisassembleMenu extends AbstractContainerMenu {
                 try {
                     for (java.lang.reflect.Field f : recipe.getClass().getDeclaredFields()) {
                         f.setAccessible(true);
+                        // 只收 Ingredient 类型字段，绝不接受 ItemStack：
+                        // 生产环境（srg 混淆）下 template/base/addition 字段名为 f_44514_ 等，
+                        // 按名匹配必然失败从而走到这里，而锻造配方的 result 字段正是 ItemStack（最终产物）——
+                        // 若接受 ItemStack，成品本身就会被当材料列出来。Ingredient 恰好只有
+                        // template/base/addition 三个，按类型过滤与字段名无关，彻底排除产物。
+                        // （此前按字段名排除 result/output/out 在混淆名下无效，已废弃。）
                         Object val = f.get(recipe);
                         if (val instanceof Ingredient ing) result.add(ing);
-                        else if (val instanceof ItemStack s && !s.isEmpty()) result.add(Ingredient.of(s));
                     }
                 } catch (Exception ignored) {
                 }
@@ -492,8 +635,8 @@ public class DisassembleMenu extends AbstractContainerMenu {
             return result;
         }
 
-        // 其他配方不再做全字段反射扫描：对复杂模组配方（如现代工业化）反射会深度递归、
-        // 宽幅爆炸烧 CPU 且停不下来。这类配方材料本就无法可靠提取，返回空让其跳过即可。
+        // 其他配方不再做全字段反射扫描：对复杂模组配方（如现代工业化）反射会深度递归并持续占用大量 CPU。
+        // 这类配方材料本就无法可靠提取，返回空列表并跳过即可。
         return Collections.emptyList();
     }
 
@@ -553,15 +696,58 @@ public class DisassembleMenu extends AbstractContainerMenu {
         return fields;
     }
 
-    private boolean containsOutputItem(Object recipeOrData, RegistryAccess access) {
-        ItemStack out = getRecipeOutput(recipeOrData, access);
-        if (out.isEmpty()) return false;
-        for (Ingredient ing : getIngredientsFromRecipe(recipeOrData)) {
-            for (ItemStack s : ing.getItems()) {
-                if (s.getItem() == out.getItem()) return true;
+    /**
+     * 从配方材料中剔除"输出物本身"（自身），保留其余材料。
+     * <p>
+     * 用于处理"自身 + 其他 → 输出"的特殊配方（部分整合包的升级/精炼配方）：
+     * 匹配时不会把成品本身当材料，也不会误删同一材料槽中的其他物品
+     * （原实现按整个 Ingredient 剔除，混合标签会把其他物品一起删掉）。
+     * </p>
+     *
+     * @param recipe 配方
+     * @param ings   配方材料（已过滤空槽）
+     * @param access 注册表访问
+     * @return 剔除输出物后的材料列表
+     */
+    private static List<Ingredient> removeOutputItemFromIngredients(Object recipe, List<Ingredient> ings, RegistryAccess access) {
+        ItemStack out = getRecipeOutput(recipe, access);
+        if (out.isEmpty()) return ings;
+        List<Ingredient> result = new ArrayList<>();
+        for (Ingredient ing : ings) {
+            ItemStack[] stacks = ing.getItems();
+            // 仅当材料变体与输出"完全相同（同物品且 NBT 相同）"时视为自身剔除，
+            // 避免拔刀剑升级（拔刀剑+材料→另一把拔刀剑）被误剔：材料刀与输出刀 NBT 不同
+            boolean containsOutput = Arrays.stream(stacks).anyMatch(s -> sameItemWithNbt(s, out));
+            if (!containsOutput) {
+                result.add(ing);
+                continue;
             }
+            // 含自身：只剔除自身物品，同一槽的其他物品保留
+            ItemStack[] rest = Arrays.stream(stacks)
+                    .filter(s -> !sameItemWithNbt(s, out))
+                    .toArray(ItemStack[]::new);
+            if (rest.length > 0) result.add(Ingredient.of(rest));
         }
-        return false;
+        return result;
+    }
+
+    /** 同物品且 NBT 完全相同（数量无关） */
+    private static boolean sameItemWithNbt(ItemStack a, ItemStack b) {
+        if (a == null || b == null) return false;
+        if (a.getItem() != b.getItem()) return false;
+        net.minecraft.nbt.CompoundTag ta = a.getTag();
+        net.minecraft.nbt.CompoundTag tb = b.getTag();
+        if (ta == null) return tb == null;
+        return ta.equals(tb);
+    }
+
+    /**
+     * 按变体索引从材料槽中选一个物品（不剔除任何变体，材料如实来自配方）。
+     * 拔刀剑"刀→刀"升级类配方输入/输出为同一物品，若按输出物剔除会误删合成用的刀刃。
+     */
+    private ItemStack pickVariant(ItemStack[] stacks, int variantIdx) {
+        if (stacks.length == 0) return null;
+        return stacks[variantIdx % stacks.length].copy();
     }
 
     // ---- 事件处理 ----
@@ -731,19 +917,42 @@ public class DisassembleMenu extends AbstractContainerMenu {
         }
 
         // 直接从后台构建的输出索引取候选，索引未就绪时先返回空（构建是异步的，不会卡服务器）。
-        List<Recipe<?>> candidates = recipeIndexOutputReady
-                ? RECIPES_BY_OUTPUT.getOrDefault(input.getItem(), Collections.emptyList())
-                : Collections.emptyList();
+        // tacz 枪械按 GunId 精确匹配（同物品不同 NBT），匹配不到时回退全量（按物品）
+        List<Recipe<?>> candidates;
+        if (recipeIndexOutputReady) {
+            String gunId = input.getTag() != null && input.getTag().contains("GunId")
+                    ? input.getTag().getString("GunId") : "";
+            candidates = RECIPES_BY_OUTPUT_DETAIL.get(input.getItem().toString() + "|" + gunId);
+            if (candidates == null || candidates.isEmpty()) {
+                candidates = RECIPES_BY_OUTPUT.getOrDefault(input.getItem(), Collections.emptyList());
+            }
+        } else {
+            candidates = Collections.emptyList();
+        }
 
         disassembleRecipes = new ArrayList<>(candidates);
         disassembleRecipes = disassembleRecipes.stream()
                 .filter(r -> {
                     List<Ingredient> ings = getIngredientsFromRecipe(r);
                     if (ings.isEmpty()) return false;
+                    // 配方材料中含与输入同物品（"自身升级/修复"类）→ 可拆
                     for (Ingredient ing : ings) {
                         for (ItemStack s : ing.getItems()) {
-                            if (s.getItem() != input.getItem()) return true;
+                            if (s.getItem() == input.getItem()) return true;
                         }
+                    }
+                    // 合成配方（非熔炉/切石等加工配方）→ 允许拆解。
+                    // 拔刀剑等特殊材料配方（如：白鞘刀+煤块+金锭 → 基础刀）材料与成品
+                    // 物品不同，若不放行将永远识别不到可拆配方。
+                    if (r instanceof CraftingRecipe) return true;
+                    // tacz 枪匠台配方（自定义 Recipe<Inventory>，非 CraftingRecipe）同样放行
+                    if (r.getClass().getName().equals("com.tacz.guns.crafting.GunSmithTableRecipe")) return true;
+                    // 锻造配方：产物与输入同物品 → 放行，允许拆回材料（下界合金胸甲→钻石胸甲+材料等）。
+                    // 材料列表已不会包含产物（见 getIngredientsFromRecipe 的 Ingredient 类型过滤），
+                    // 此处放行是为了保证"输入=最终产物"的锻造配方仍能出现在拆解列表中。
+                    if (r instanceof SmithingRecipe) {
+                        ItemStack out = getRecipeOutput(r, level.registryAccess());
+                        if (!out.isEmpty() && out.getItem() == input.getItem()) return true;
                     }
                     return false;
                 })
@@ -850,12 +1059,23 @@ public class DisassembleMenu extends AbstractContainerMenu {
         }
 
         Recipe<?> recipe = disassembleRecipes.get(disassembleRecipeIdx);
+        // 合并同一材料（同 Ingredient 实例：tacz count 展开、普通配方同 symbol 多槽）：
+        // 每个材料显示为一个槽位 × 配方数量（与 JEI 展示一致，避免拆出多组）
+        Map<Ingredient, Integer> merged = new LinkedHashMap<>();
         for (Ingredient ing : getIngredientsFromRecipe(recipe)) {
-            ItemStack[] stacks = ing.getItems();
-            if (stacks.length > 0) {
-                ItemStack mat = stacks[materialVariantIdx % stacks.length].copy();
-                if (mat.getItem() != input.getItem()) currentProductList.add(mat);
-            }
+            merged.merge(ing, 1, Integer::sum);
+        }
+        for (Map.Entry<Ingredient, Integer> e : merged.entrySet()) {
+            ItemStack[] stacks = e.getKey().getItems();
+            if (stacks.length == 0) continue;
+            // 不再用"输出物本体"剔除材料变体：
+            // 拔刀剑"刀→刀"升级类配方（输入/输出同物品，靠 NBT 区分）会误删合成用的刀刃，
+            // 材料如实来自配方 ingredients（配方本身不含输出物，不会有"拆解出自己"）。
+            ItemStack mat = pickVariant(stacks, materialVariantIdx);
+            if (mat == null || mat.isEmpty()) continue;
+            int n = e.getValue();
+            mat.setCount(Math.max(1, Math.min(n, mat.getMaxStackSize())));
+            currentProductList.add(mat);
         }
         setButtonMode(currentProductList.size() > 9);
         updateMiddleGridFromProductList();
@@ -919,7 +1139,7 @@ public class DisassembleMenu extends AbstractContainerMenu {
         ensureRecipeIndex(level);
 
         // 用后台构建的"材料→配方"索引收集候选，再精确匹配。
-        // 绝不在此全量遍历所有配方，否则大整合包会卡死服务器线程。
+        // 绝不在此全量遍历所有配方，否则大整合包会阻塞服务器线程。
         if (recipeIndexReady) {
             java.util.LinkedHashSet<Recipe<?>> craftCandidates = new java.util.LinkedHashSet<>();
             for (ItemStack p : placed) {
@@ -934,19 +1154,10 @@ public class DisassembleMenu extends AbstractContainerMenu {
                         .collect(Collectors.toList());
                 if (ings.isEmpty()) continue;
 
-                boolean isSmithing = (r instanceof SmithingTransformRecipe || r instanceof SmithingTrimRecipe);
-                if (isSmithing) {
-                    ItemStack smithingOutput = getRecipeOutput(r, level.registryAccess());
-                    if (!smithingOutput.isEmpty()) {
-                        ings = ings.stream()
-                                .filter(ing -> Arrays.stream(ing.getItems())
-                                        .noneMatch(s -> s.getItem() == smithingOutput.getItem()))
-                                .collect(Collectors.toList());
-                    }
-                    if (ings.isEmpty()) continue;
-                }
-
-                if (!isSmithing && containsOutputItem(r, level.registryAccess())) continue;
+                // 材料中含输出物本身（"自身 + 其他 → 输出"的特殊配方，如整合包升级配方）：
+                // 只剔除自身物品，保留其他材料参与匹配；不再整配方跳过或误删同槽其他物品。
+                ings = removeOutputItemFromIngredients(r, ings, level.registryAccess());
+                if (ings.isEmpty()) continue;
 
                 if (matchesIngredients(placed, ings)) craftRecipes.add(r);
             }
@@ -1044,7 +1255,16 @@ public class DisassembleMenu extends AbstractContainerMenu {
         if (obj instanceof ItemStack stack) {
             container.setItem(10, stack.copy());
         } else if (obj instanceof Recipe<?> r) {
-            container.setItem(10, getRecipeOutput(r, player.level().registryAccess()).copy());
+            // 用 assemble 生成预览（与最终取走时一致的产物）：
+            // 精妙背包升级等配方需要从输入复制 NBT，静态 getResultItem 是空物品。
+            ItemStack preview = assembleRecipeOutput(r, player.level().registryAccess());
+            if (preview.isEmpty()) preview = getRecipeOutput(r, player.level().registryAccess());
+            if (preview.isEmpty()) {
+                container.setItem(10, ItemStack.EMPTY);
+                return;
+            }
+            // 预览与取走产物约定一致（assemble 幂等）：直接用于窗口显示
+            container.setItem(10, preview);
         }
     }
 
@@ -1185,32 +1405,29 @@ public class DisassembleMenu extends AbstractContainerMenu {
 
         // 标准配方（含锻造）
         if (!(obj instanceof Recipe<?> recipe)) return;
-        ItemStack result = getRecipeOutput(recipe, player.level().registryAccess());
+
+        // 玩家点击时已经拿走了槽 10 的预览物（displayCurrentCraftResult 用 assemble 生成，
+        // 与这里结果一致）。这里只需校验并消耗材料；消耗失败则把产物放回槽 10。
+        ItemStack result = assembleRecipeOutput(recipe, player.level().registryAccess());
         if (result.isEmpty()) return;
 
         List<Ingredient> ings = getIngredientsFromRecipe(recipe).stream()
                 .filter(i -> !i.isEmpty())
                 .collect(Collectors.toList());
 
-        boolean isSmithing = (recipe instanceof SmithingTransformRecipe || recipe instanceof SmithingTrimRecipe);
-        if (isSmithing) {
-            ItemStack smithingOutput = result;
-            ings = ings.stream()
-                    .filter(ing -> Arrays.stream(ing.getItems())
-                            .noneMatch(s -> s.getItem() == smithingOutput.getItem()))
-                    .collect(Collectors.toList());
+        // 合成确认时不执行"剔除输出物"处理：若剔除自身，玩家可无成本合成，造成物品复制。
+        // "自身 + 其他 → 输出"的配方应消耗全部材料（含自身）。
+
+        if (!tryConsumeIngredients(ings)) {
+            // 材料在预览后已被改动（极少见）：将产物放回槽 10，以免玩家无消耗获得产物。
+            container.setItem(10, result.copy());
+            container.setChanged();
+            return;
         }
 
-        if (!tryConsumeIngredients(ings)) return;
-        container.setItem(10, result.copy());
-        container.setChanged();
-
-        boolean canContinue = checkIngredientsAvailable(ings);
-        if (!canContinue) {
-            craftRecipes.clear();
-            craftRecipeIdx = 0;
-            updateCraftingResultByItems();
-        }
+        craftRecipes.clear();
+        craftRecipeIdx = 0;
+        updateCraftingResultByItems();
         broadcastChanges();
     }
 
@@ -1477,6 +1694,7 @@ public class DisassembleMenu extends AbstractContainerMenu {
 
             // ---- 阶段一：产出→配方（拆解） ----
             RECIPES_BY_OUTPUT.clear();
+            RECIPES_BY_OUTPUT_DETAIL.clear();
             recipeIndexProcessed = 0;
             recipeIndexTotal = recipes.size();
             long batchEnd = System.nanoTime() + INDEX_WORK_NS;
@@ -1486,6 +1704,12 @@ public class DisassembleMenu extends AbstractContainerMenu {
                     ItemStack out = getRecipeOutput(r, level.registryAccess());
                     if (!out.isEmpty()) {
                         RECIPES_BY_OUTPUT.computeIfAbsent(out.getItem(),
+                                k -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(r);
+                        // tacz 枪械等"同物品靠 NBT 区分"的输出：按 GunId 精确索引
+                        String nbtKey = out.getTag() != null && out.getTag().contains("GunId")
+                                ? out.getTag().getString("GunId") : "";
+                        RECIPES_BY_OUTPUT_DETAIL.computeIfAbsent(
+                                out.getItem().toString() + "|" + nbtKey,
                                 k -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(r);
                     }
                 } catch (Throwable ignored) {
@@ -1559,7 +1783,7 @@ public class DisassembleMenu extends AbstractContainerMenu {
             f.get(RECIPE_INGREDIENT_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
         } catch (java.util.concurrent.TimeoutException te) {
             // 该配方类型读取挂起/死锁：跳过，之后同类不再尝试。
-            // cancel(true) 会中断任务线程，防止它一直烧 CPU。
+            // cancel(true) 会中断任务线程，防止其持续占用 CPU。
             f.cancel(true);
             UNREADABLE_RECIPE_TYPES.add(r.getClass());
         } catch (Throwable ignored) {
@@ -1643,6 +1867,7 @@ public class DisassembleMenu extends AbstractContainerMenu {
         // 代数+1：让正在进行的旧构建立即失效（它记录的是重置前的代数，检测到不匹配会放弃）
         indexGeneration++;
         RECIPES_BY_OUTPUT.clear();
+        RECIPES_BY_OUTPUT_DETAIL.clear();
         RECIPES_BY_INGREDIENT.clear();
         recipeIndexOutputReady = false;
         recipeIndexReady = false;

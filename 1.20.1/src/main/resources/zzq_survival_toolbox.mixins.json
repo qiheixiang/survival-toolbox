@@ -7,12 +7,27 @@
   "mixins": [
     "LivingEntityMixin",
     "EntityMixin",
-    "ItemStackMixin"
+    "ItemStackMixin",
+    "ItemEntityMixin",
+    "InventoryMixin",
+    "BlockBehaviourMixin",
+    "BlockStateBaseMixin"
   ],
   "client": [
     "LivingEntityMixin",
     "EntityMixin",
-    "ItemStackMixin"
+    "ItemStackMixin",
+    "ItemEntityMixin",
+    "InventoryMixin",
+    "BlockBehaviourMixin",
+    "BlockStateBaseMixin",
+    "ModelBlockRendererMixin",
+    "LevelRendererLightMixin",
+    "AbstractContainerScreenMixin",
+    "ScreenEffectRendererMixin",
+    "BlockEntityRenderDispatcherMixin",
+    "EmbeddiumLightMixin",
+    "VisualManagerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

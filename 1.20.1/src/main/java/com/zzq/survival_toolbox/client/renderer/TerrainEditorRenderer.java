@@ -41,7 +41,7 @@ public class TerrainEditorRenderer {
 
         // ---- 计算目标坐标（与操作逻辑完全一致） ----
         BlockPos target;
-        // 注意：MISS 类型的 HitResult 也是 BlockHitResult，必须用 getType() 判断
+        // MISS 类型的 HitResult 同为 BlockHitResult，须用 getType() 判断
         if (mc.hitResult != null && mc.hitResult.getType() == HitResult.Type.BLOCK) {
             // 准星命中方块（近处交互范围）：直接取被击中的方块本身
             target = ((net.minecraft.world.phys.BlockHitResult) mc.hitResult).getBlockPos();

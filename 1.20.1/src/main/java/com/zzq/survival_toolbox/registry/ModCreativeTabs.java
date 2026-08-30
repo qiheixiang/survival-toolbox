@@ -37,6 +37,8 @@ public class ModCreativeTabs {
                         output.accept(ModItems.STATIC_LEASH.get());
                         output.accept(ModItems.BLACKLIST.get());
                         output.accept(ModItems.ENCHANTMENT_BAG.get());
+                        output.accept(ModItems.XRAY_GOGGLES.get());
+                        output.accept(ModItems.POCKET_DIMENSION.get());
 
                         // ---- 方块 ----
                         output.accept(ModBlocks.DISASSEMBLE_TABLE.get());
@@ -48,6 +50,7 @@ public class ModCreativeTabs {
                         output.accept(ModBlocks.OMNI_HOPPER.get());
                         output.accept(ModBlocks.ENCHANTMENT_TRANSFER.get());
                         output.accept(ModBlocks.FEAST.get());
+                        output.accept(ModBlocks.TEMPERING_BOX.get());
 
                         // ---- 附魔书 ----
                         ItemStack bloodthirstyBook = EnchantedBookItem.createForEnchantment(

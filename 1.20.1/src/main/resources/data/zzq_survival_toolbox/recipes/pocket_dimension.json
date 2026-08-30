@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "LLL",
+    "LDL",
+    "LLL"
+  ],
+  "key": {
+    "L": {
+      "item": "minecraft:leather"
+    },
+    "D": {
+      "item": "zzq_survival_toolbox:disassemble_table"
+    }
+  },
+  "result": {
+    "item": "zzq_survival_toolbox:pocket_dimension"
+  }
+}

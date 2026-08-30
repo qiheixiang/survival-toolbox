@@ -44,6 +44,14 @@ public class ModItems {
     public static final RegistryObject<Item> ENCHANTMENT_BAG =
             ITEMS.register("enchantment_bag", EnchantmentBagItem::new);
 
+    /** 透视眼镜（手持时透视白名单中的方块） */
+    public static final RegistryObject<Item> XRAY_GOGGLES =
+            ITEMS.register("xray_goggles", XrayGogglesItem::new);
+
+    /** 随身次元袋（按类型合并的无限存储） */
+    public static final RegistryObject<Item> POCKET_DIMENSION =
+            ITEMS.register("pocket_dimension", PocketDimensionItem::new);
+
     /**
      * 空方法，仅用于触发类加载和注册
      */

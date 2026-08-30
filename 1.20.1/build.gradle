@@ -71,6 +71,10 @@ repositories {
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    // 编译期依赖：仅用于 Mixin 注解处理器校验 @Mixin(targets) 目标类，不打包进模组。
+    // jar 位于 libs/ 目录，来源与说明见 libs/README.md。
+    compileOnly files('libs/flywheel-forge-1.20.1-1.0.4.jar')
+    compileOnly files('libs/embeddium-0.3.31+mc1.20.1.jar')
 }
 
 // ========== Mixin 配置 ==========

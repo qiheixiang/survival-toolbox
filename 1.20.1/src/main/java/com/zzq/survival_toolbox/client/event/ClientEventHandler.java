@@ -83,6 +83,8 @@ public class ClientEventHandler {
             MenuScreens.register(ModMenus.ENCHANTMENT_TRANSFER.get(), EnchantmentTransferScreen::new);
             MenuScreens.register(ModMenus.BLACKLIST.get(), BlacklistScreen::new);
             MenuScreens.register(ModMenus.FEAST.get(), FeastScreen::new);
+            MenuScreens.register(ModMenus.POCKET_DIMENSION.get(), PocketDimensionScreen::new);
+            MenuScreens.register(ModMenus.TEMPERING_BOX.get(), TemperingBoxScreen::new);
         });
     }
 

@@ -45,11 +45,10 @@ public abstract class LivingEntityMixin {
         float originalAmount = amount;
         float totalLayers = (float) AdaptationHelper.getTotalLayers(entity);
 
-        // 1. 层数增长
-        if (originalAmount > totalLayers) {
-            AdaptationHelper.applyLayerGain(entity, originalAmount);
-            totalLayers = (float) AdaptationHelper.getTotalLayers(entity);
-        }
+        // 1. 层数增长：逐件独立判定（某件层数 < 伤害就给该件叠层），与总层数无关。
+        //    即使总层数足以完全抵挡伤害，单件层数低于伤害的盔甲仍会叠层。
+        AdaptationHelper.applyLayerGain(entity, originalAmount);
+        totalLayers = (float) AdaptationHelper.getTotalLayers(entity);
 
         // 2. 层数减伤
         float reductionPerLayer = ModConfig.CLIENT.adaptLayerDamageReduction.get().floatValue();
@@ -85,6 +84,31 @@ public abstract class LivingEntityMixin {
 
         if (amount <= 0) {
             cir.setReturnValue(false);
+        }
+    }
+
+    /**
+     * 已适应的负面效果在"挂上之前"直接拒绝（不再先挂上再清除）。
+     */
+    @Inject(method = "addEffect(Lnet/minecraft/world/effect/MobEffectInstance;Lnet/minecraft/world/entity/Entity;)Z",
+            at = @At("HEAD"), cancellable = true)
+    private void zzq_blockAdaptedEffect(net.minecraft.world.effect.MobEffectInstance instance,
+                                        net.minecraft.world.entity.Entity source,
+                                        CallbackInfoReturnable<Boolean> cir) {
+        if (instance == null) return;
+        net.minecraft.world.effect.MobEffect effect = instance.getEffect();
+        if (effect.isBeneficial()) return;
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (self.level().isClientSide) return;
+        net.minecraft.resources.ResourceLocation rl =
+                net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.getKey(effect);
+        if (rl == null) return;
+        String effectId = rl.toString();
+        for (ItemStack armor : AdaptationHelper.getAdaptationArmors(self)) {
+            if (AdaptationHelper.isEffectAdapted(armor, effectId)) {
+                cir.setReturnValue(false);
+                return;
+            }
         }
     }
 }

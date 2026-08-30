@@ -3,6 +3,8 @@ package com.zzq.survival_toolbox.item;
 import com.zzq.survival_toolbox.client.renderer.AnvilOrbItemRenderer;
 import com.zzq.survival_toolbox.entity.AnvilOrbProjectile;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
+import net.minecraft.core.Direction;
+import net.minecraft.core.Position;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -10,8 +12,10 @@ import net.minecraft.stats.Stats;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ProjectileItem;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
@@ -26,9 +30,10 @@ import java.util.function.Consumer;
  * 右键投掷后，命中实体时尝试捕获该实体。
  * 捕获条件：目标血量低于配置阈值且不在黑名单中。
  * 捕获成功后生成 {@link CapturedEntityItem} 物品。
+ * 实现 {@link ProjectileItem}：放入发射器后，红石触发会像右键一样投掷铁砧球。
  * </p>
  */
-public class AnvilOrbItem extends Item {
+public class AnvilOrbItem extends Item implements ProjectileItem {
 
     public AnvilOrbItem() {
         super(new Properties().stacksTo(64));
@@ -81,6 +86,22 @@ public class AnvilOrbItem extends Item {
             stack.shrink(1);
         }
         player.awardStat(Stats.ITEM_USED.get(this));
+    }
+
+    /**
+     * 发射器使用：生成铁砧球弹射物（等同右键投掷，无射手）
+     *
+     * @param level     世界
+     * @param position  发射口位置
+     * @param stack     被发射的物品
+     * @param direction 发射方向
+     * @return 生成的弹射物
+     */
+    @Override
+    public Projectile asProjectile(Level level, Position position, ItemStack stack, Direction direction) {
+        AnvilOrbProjectile projectile = new AnvilOrbProjectile(level, position.x(), position.y(), position.z());
+        projectile.setItem(stack);
+        return projectile;
     }
 
     @Override

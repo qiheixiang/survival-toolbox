@@ -243,8 +243,11 @@ public class AdaptationHelper {
 
     public static void addArmorLayers(ItemStack armor, double amount) {
         float current = getArmorLayers(armor);
+        // 防御：损坏数据（NaN/Infinity）归零，避免 float 溢出后无法恢复
+        if (Float.isNaN(current) || Float.isInfinite(current)) current = 0;
         double max = ModConfig.CLIENT.adaptMaxLayers.get();
         double newLayers = Math.min(current + amount, max);
+        if (newLayers < 0) newLayers = 0;
         setArmorLayers(armor, (float) newLayers);
     }
 

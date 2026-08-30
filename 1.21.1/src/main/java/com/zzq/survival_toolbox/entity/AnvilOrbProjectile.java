@@ -83,6 +83,11 @@ public class AnvilOrbProjectile extends ThrowableItemProjectile implements ItemS
         super(type, level);
     }
 
+    /** 发射器/无射手投掷用：按坐标生成弹射物 */
+    public AnvilOrbProjectile(Level level, double x, double y, double z) {
+        super(ModEntities.ANVIL_ORB.get(), x, y, z, level);
+    }
+
     public AnvilOrbProjectile(Level level, LivingEntity owner) {
         super(ModEntities.ANVIL_ORB.get(), owner, level);
     }
@@ -235,8 +240,7 @@ public class AnvilOrbProjectile extends ThrowableItemProjectile implements ItemS
                 try {
                     lootDrops = generateLootDrops(serverLevel, living);
                 } catch (Exception ex) {
-                    System.out.println("[Capture] loot generation error: " + ex);
-                    ex.printStackTrace();
+                    // 吞掉异常防止中断流程
                 }
             }
 
@@ -247,7 +251,7 @@ public class AnvilOrbProjectile extends ThrowableItemProjectile implements ItemS
                             this.level().registryAccess().registryOrThrow(Registries.DAMAGE_TYPE)
                                     .getHolderOrThrow(DamageTypes.GENERIC);
                     DamageSource damageSource = new DamageSource(holder, this, this.getOwner());
-                    // 确保死亡：先走完整死亡流程（掉落/死亡事件），再用 remove(KILLED) 兜底直接抹除（无倒地动画）
+                    // 确保死亡：先走完整死亡流程（掉落/死亡事件），再以 remove(KILLED) 回退直接抹除（无倒地动画）
                     if (!living.isRemoved()) {
                         living.setHealth(0);
                         if (!living.hurt(damageSource, Float.MAX_VALUE)) {
@@ -279,7 +283,6 @@ public class AnvilOrbProjectile extends ThrowableItemProjectile implements ItemS
                         ItemNbt.getOrCreateTag(capturedStack).put(CapturedEntityItem.TAG_DROP_LIST, dropListNBT);
                     }
                 } catch (Exception ex) {
-                    ex.printStackTrace();
                     // 掉落列表构建失败不影响捕获本身
                 }
             }
@@ -300,7 +303,6 @@ public class AnvilOrbProjectile extends ThrowableItemProjectile implements ItemS
                     SoundEvents.ANVIL_LAND, SoundSource.NEUTRAL, 1.0F, 1.0F);
 
         } catch (Exception e) {
-            e.printStackTrace();
             if (this.getOwner() instanceof Player player) {
                 player.sendSystemMessage(Component.literal("捕获失败: " + e.getClass().getSimpleName() + ": " + e.getMessage()));
             }
@@ -361,7 +363,6 @@ public class AnvilOrbProjectile extends ThrowableItemProjectile implements ItemS
             } catch (Exception ignored) {
             }
         }
-        System.out.println("[Capture] loot " + lootTableId.location() + " drops=" + result.size() + " for " + living.getType());
         return result;
     }
 

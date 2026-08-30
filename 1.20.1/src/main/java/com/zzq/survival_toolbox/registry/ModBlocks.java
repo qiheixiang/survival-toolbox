@@ -116,6 +116,15 @@ public class ModBlocks {
                     .noOcclusion())
     );
 
+    /** 锤炼箱方块（被捕捉实体每秒锤炼自适应装备，+0.001 × 实体数 层） */
+    public static final RegistryObject<Block> TEMPERING_BOX = registerBlock(
+            "tempering_box",
+            () -> new TemperingBoxBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(0.5F, 4.0F)
+                    .sound(SoundType.METAL))
+    );
+
     // ============================================================
     // 注册辅助方法
     // ============================================================

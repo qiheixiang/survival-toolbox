@@ -5,6 +5,8 @@ import com.zzq.survival_toolbox.client.renderer.CapturedEntityRenderer;
 import com.zzq.survival_toolbox.entity.CapturedEntityProjectile;
 import com.zzq.survival_toolbox.registry.ModItems;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
+import net.minecraft.core.Direction;
+import net.minecraft.core.Position;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
@@ -14,8 +16,10 @@ import net.minecraft.stats.Stats;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ProjectileItem;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
@@ -33,9 +37,10 @@ import java.util.function.Consumer;
  * 存储捕获的实体数据（类型、NBT、名称、生命值、掉落列表等）。
  * 右键投掷后释放实体到世界中。
  * 在物品栏中会渲染捕获实体的模型。
+ * 实现 {@link ProjectileItem}：放入发射器后，红石触发会像右键一样投掷弹射物释放实体。
  * </p>
  */
-public class CapturedEntityItem extends Item {
+public class CapturedEntityItem extends Item implements ProjectileItem {
 
     private static final String TAG_ENTITY_TYPE = "EntityType";
     private static final String TAG_ENTITY_NAME = "EntityName";
@@ -208,6 +213,22 @@ public class CapturedEntityItem extends Item {
             player.awardStat(Stats.ITEM_USED.get(this));
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
+    }
+
+    /**
+     * 发射器使用：生成捕获实体弹射物（等同右键投掷，无射手），落地时释放被捕获的实体
+     *
+     * @param level     世界
+     * @param position  发射口位置
+     * @param stack     被发射的物品
+     * @param direction 发射方向
+     * @return 生成的弹射物
+     */
+    @Override
+    public Projectile asProjectile(Level level, Position position, ItemStack stack, Direction direction) {
+        CapturedEntityProjectile projectile = new CapturedEntityProjectile(level, position.x(), position.y(), position.z());
+        projectile.setCapturedData(stack);
+        return projectile;
     }
 
     // ============================================================

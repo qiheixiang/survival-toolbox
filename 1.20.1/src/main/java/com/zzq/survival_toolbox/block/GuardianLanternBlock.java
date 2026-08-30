@@ -28,9 +28,9 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraftforge.network.NetworkHooks;
-import net.minecraft.world.Containers;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -256,21 +256,13 @@ public class GuardianLanternBlock extends BaseEntityBlock {
     /**
      * 方块被破坏时的回调
      * <p>
-     * 将方块实体数据保存到掉落物中（保留配置），并清除光方块。
+     * 清除光方块（掉落由 {@link #getDrops} 在战利品阶段处理，避免重复掉落）。
      * </p>
      */
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos,
                          BlockState newState, boolean isMoving) {
         if (!state.is(newState.getBlock())) {
-            if (!level.isClientSide) {
-                ItemStack stack = new ItemStack(this);
-                BlockEntity be = level.getBlockEntity(pos);
-                if (be instanceof GuardianLanternBlockEntity lantern) {
-                    stack.addTagElement("BlockEntityTag", lantern.saveToNbt());
-                }
-                Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), stack);
-            }
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof GuardianLanternBlockEntity lantern) {
                 lantern.onRemove();
@@ -279,8 +271,19 @@ public class GuardianLanternBlock extends BaseEntityBlock {
         super.onRemove(state, level, pos, newState, isMoving);
     }
 
+    /**
+     * 战利品掉落：掉落一个携带方块实体数据（配置）的镇魂灯。
+     * <p>
+     * 数据写入 "BlockEntityTag"，放置时 BlockItem 会读取恢复配置。
+     * </p>
+     */
     @Override
     public List<ItemStack> getDrops(BlockState state, LootParams.Builder builder) {
-        return List.of(new ItemStack(this));
+        ItemStack stack = new ItemStack(this);
+        BlockEntity be = builder.getOptionalParameter(LootContextParams.BLOCK_ENTITY);
+        if (be instanceof GuardianLanternBlockEntity lantern) {
+            stack.addTagElement("BlockEntityTag", lantern.saveToNbt());
+        }
+        return List.of(stack);
     }
 }

@@ -207,7 +207,7 @@ public class TerrainEditorItem extends Item {
      */
     public static BlockPos getTargetPosClient(Player player) {
         HitResult hit = player.pick(20, 0, false);
-        // 注意：MISS 类型的 HitResult 也是 BlockHitResult，必须用 getType() 判断
+        // MISS 类型的 HitResult 同为 BlockHitResult，须用 getType() 判断
         if (hit.getType() == HitResult.Type.BLOCK) {
             return ((BlockHitResult) hit).getBlockPos();
         }

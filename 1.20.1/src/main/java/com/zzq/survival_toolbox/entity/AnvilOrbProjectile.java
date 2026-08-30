@@ -80,6 +80,11 @@ public class AnvilOrbProjectile extends ThrowableItemProjectile implements ItemS
         super(type, level);
     }
 
+    /** 发射器/无射手投掷用：按坐标生成弹射物 */
+    public AnvilOrbProjectile(Level level, double x, double y, double z) {
+        super(ModEntities.ANVIL_ORB.get(), x, y, z, level);
+    }
+
     public AnvilOrbProjectile(Level level, LivingEntity owner) {
         super(ModEntities.ANVIL_ORB.get(), owner, level);
     }
@@ -225,7 +230,7 @@ public class AnvilOrbProjectile extends ThrowableItemProjectile implements ItemS
                 }
             }
 
-            // 触发死亡：先走完整死亡流程（掉落/死亡事件），再用 remove(KILLED) 兜底直接抹除（无倒地动画）
+            // 触发死亡：先走完整死亡流程（掉落/死亡事件），再用 remove(KILLED) 回退直接移除（无倒地动画）
             if (target instanceof LivingEntity living) {
                 Holder.Reference<net.minecraft.world.damagesource.DamageType> holder =
                         this.level().registryAccess().registryOrThrow(Registries.DAMAGE_TYPE)

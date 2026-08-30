@@ -18,7 +18,7 @@ public class ModEnchantments {
             DeferredRegister.create(ForgeRegistries.ENCHANTMENTS, "zzq_survival_toolbox");
 
     /**
-     * 嗜血附魔（武器）
+     * 嗜血附魔（任意带攻击力的物品）
      * 通过击杀怪物累积攻击力加成，攻击时附加伤害、恢复生命、修复耐久
      */
     public static final RegistryObject<Enchantment> BLOODTHIRSTY =

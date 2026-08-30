@@ -73,6 +73,12 @@ public class ModBlockEntities {
                     () -> BlockEntityType.Builder.of(FeastBlockEntity::new,
                             ModBlocks.FEAST.get()).build(null));
 
+    /** 锤炼箱方块实体 */
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<TemperingBoxBlockEntity>> TEMPERING_BOX =
+            BLOCK_ENTITIES.register("tempering_box",
+                    () -> BlockEntityType.Builder.of(TemperingBoxBlockEntity::new,
+                            ModBlocks.TEMPERING_BOX.get()).build(null));
+
     /**
      * 空方法，用于触发类加载和注册
      */

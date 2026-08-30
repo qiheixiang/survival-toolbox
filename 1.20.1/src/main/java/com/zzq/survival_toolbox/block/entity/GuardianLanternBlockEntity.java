@@ -601,8 +601,8 @@ public class GuardianLanternBlockEntity extends BaseContainerBlockEntity impleme
         tag.putInt("RangeZ", rangeZ);
         tag.putInt("AttackInterval", attackInterval);
 
-        // 注意：LightBlocks 不再持久化/同步。它是运行时放置的光方块坐标，
-        // 范围大时可达数万条，会让 NBT 超过网络 2MB 上限导致连接丢失。
+        // LightBlocks 不再持久化/同步：它是运行时放置的光方块坐标，
+        // 范围大时可达数万条，会使 NBT 超过网络 2MB 上限导致连接丢失。
         // 重新加载时 onLoad 会根据 enabled+lit+range 自动重新放置并重建列表。
 
         if (ownerUUID != null) tag.putUUID("OwnerUUID", ownerUUID);

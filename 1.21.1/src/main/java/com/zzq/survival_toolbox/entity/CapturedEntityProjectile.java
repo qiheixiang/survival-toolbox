@@ -39,6 +39,11 @@ public class CapturedEntityProjectile extends ThrowableItemProjectile {
         super(type, level);
     }
 
+    /** 发射器/无射手投掷用：按坐标生成弹射物 */
+    public CapturedEntityProjectile(Level level, double x, double y, double z) {
+        super(ModEntities.CAPTURED_ENTITY_PROJECTILE.get(), x, y, z, level);
+    }
+
     public CapturedEntityProjectile(Level level, Player shooter) {
         super(ModEntities.CAPTURED_ENTITY_PROJECTILE.get(), shooter, level);
     }

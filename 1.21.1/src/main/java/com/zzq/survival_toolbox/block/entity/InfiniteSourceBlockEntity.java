@@ -274,8 +274,11 @@ public class InfiniteSourceBlockEntity extends BaseContainerBlockEntity
         ItemStack heldItem = player.getItemInHand(hand);
         if (heldItem.isEmpty()) return false;
 
-        // 1. 先尝试模组容器（IFluidHandlerItem）
-        IFluidHandlerItem fluidHandler = heldItem.getCapability(net.neoforged.neoforge.capabilities.Capabilities.FluidHandler.ITEM);
+        // 1. 先尝试模组容器（IFluidHandlerItem）——每次只取 1 个容器（支持堆叠桶）
+        // 注意：capability 必须从"单个容器副本"获取，堆叠桶共享 NBT，直接操作整叠会把整叠都改成装液状态。
+        ItemStack oneBucket = heldItem.copy();
+        oneBucket.setCount(1);
+        IFluidHandlerItem fluidHandler = oneBucket.getCapability(net.neoforged.neoforge.capabilities.Capabilities.FluidHandler.ITEM);
         if (fluidHandler != null) {
             if (storedFluid.isEmpty()) return false;
 
@@ -300,8 +303,8 @@ public class InfiniteSourceBlockEntity extends BaseContainerBlockEntity
             return true;
         }
 
-        // 2. 原版玻璃瓶（没有 IFluidHandlerItem）
-        if (heldItem.getItem() == Items.GLASS_BOTTLE && heldItem.getCount() == 1) {
+        // 2. 原版玻璃瓶（没有 IFluidHandlerItem）——支持堆叠
+        if (heldItem.getItem() == Items.GLASS_BOTTLE) {
             if (storedFluid.getFluid() == Fluids.WATER) {
                 heldItem.shrink(1);
                 ItemStack waterBottle = net.minecraft.world.item.alchemy.PotionContents.createItemStack(Items.POTION, net.minecraft.world.item.alchemy.Potions.WATER);

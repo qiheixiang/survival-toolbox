@@ -87,6 +87,16 @@ public class ModMenus {
             MENUS.register("feast",
                     () -> IMenuTypeExtension.create(FeastMenu::new));
 
+    /** 随身次元袋菜单（从玩家主手获取次元袋物品） */
+    public static final DeferredHolder<MenuType<?>, MenuType<PocketDimensionMenu>> POCKET_DIMENSION =
+            MENUS.register("pocket_dimension",
+                    () -> IMenuTypeExtension.create(PocketDimensionMenu::new));
+
+    /** 锤炼箱菜单 */
+    public static final DeferredHolder<MenuType<?>, MenuType<TemperingBoxMenu>> TEMPERING_BOX =
+            MENUS.register("tempering_box",
+                    () -> IMenuTypeExtension.create(TemperingBoxMenu::new));
+
     /**
      * 空方法，用于触发类加载和注册
      */

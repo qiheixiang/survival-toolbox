@@ -51,6 +51,8 @@ public class ClientEventHandler {
         event.register(ModMenus.ENCHANTMENT_TRANSFER.get(), EnchantmentTransferScreen::new);
         event.register(ModMenus.BLACKLIST.get(), BlacklistScreen::new);
         event.register(ModMenus.FEAST.get(), FeastScreen::new);
+        event.register(ModMenus.POCKET_DIMENSION.get(), PocketDimensionScreen::new);
+        event.register(ModMenus.TEMPERING_BOX.get(), TemperingBoxScreen::new);
     }
 
     @SubscribeEvent

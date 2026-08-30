@@ -46,4 +46,19 @@ public class EntityMixin {
             this.remainingFireTicks = 0;
         }
     }
+
+    /**
+     * 次元袋永不消失：掉落超时（5 分钟）与整合包清道夫清理掉落物
+     * 都走 discard → remove(DISCARDED)，这里统一拦截（玩家拾取流程放行）。
+     */
+    @Inject(method = "remove(Lnet/minecraft/world/entity/Entity$RemovalReason;)V",
+            at = @At("HEAD"), cancellable = true)
+    private void zzq_keepPocketBag(Entity.RemovalReason reason, CallbackInfo ci) {
+        if (!((Object) this instanceof net.minecraft.world.entity.item.ItemEntity ie)) return;
+        if (!(ie instanceof com.zzq.survival_toolbox.util.PocketBagGuarded guarded)) return;
+        if (guarded.zzq_isBeingPickedUp()) return; // 玩家正常拾取
+        if (ie.getItem().is(com.zzq.survival_toolbox.registry.ModItems.POCKET_DIMENSION.get())) {
+            ci.cancel();
+        }
+    }
 }

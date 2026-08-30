@@ -15,7 +15,7 @@
   "slots": [
     "mainhand"
   ],
-  "supported_items": "#minecraft:enchantable/weapon",
+  "supported_items": "#zzq_survival_toolbox:enchantable/bloodthirsty",
   "weight": 1,
   "treasure": true
 }

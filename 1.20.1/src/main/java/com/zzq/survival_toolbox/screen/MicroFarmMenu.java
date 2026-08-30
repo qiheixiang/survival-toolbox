@@ -166,25 +166,28 @@ public class MicroFarmMenu extends AbstractContainerMenu {
             ItemStack slotStack = slot.getItem();
             stack = slotStack.copy();
 
-            if (index < STORAGE_START) {
-                if (!this.moveItemStackTo(slotStack, STORAGE_START, this.slots.size(), true)) {
+            // 牧场内部槽（实体/食物/存储，0~TOTAL_SLOTS-1）→ 玩家背包
+            if (index < TOTAL_SLOTS) {
+                if (!this.moveItemStackTo(slotStack, TOTAL_SLOTS, this.slots.size(), true)) {
                     return ItemStack.EMPTY;
                 }
             } else {
+                // 玩家背包 → 牧场：目标范围严格限制在容器槽区，
+                // 避免目标范围包含源槽导致物品与自己合并（数量翻倍）
                 if (slotStack.getItem() == ModItems.CAPTURED_ENTITY.get()) {
                     if (!this.moveItemStackTo(slotStack, SLOT_ENTITY, SLOT_ENTITY + 1, false)) {
-                        if (!this.moveItemStackTo(slotStack, STORAGE_START, this.slots.size(), false)) {
+                        if (!this.moveItemStackTo(slotStack, STORAGE_START, TOTAL_SLOTS, false)) {
                             return ItemStack.EMPTY;
                         }
                     }
                 } else if (slotStack.getItem().isEdible()) {
                     if (!this.moveItemStackTo(slotStack, FOOD_START, FOOD_END + 1, false)) {
-                        if (!this.moveItemStackTo(slotStack, STORAGE_START, this.slots.size(), false)) {
+                        if (!this.moveItemStackTo(slotStack, STORAGE_START, TOTAL_SLOTS, false)) {
                             return ItemStack.EMPTY;
                         }
                     }
                 } else {
-                    if (!this.moveItemStackTo(slotStack, STORAGE_START, this.slots.size(), false)) {
+                    if (!this.moveItemStackTo(slotStack, STORAGE_START, TOTAL_SLOTS, false)) {
                         return ItemStack.EMPTY;
                     }
                 }

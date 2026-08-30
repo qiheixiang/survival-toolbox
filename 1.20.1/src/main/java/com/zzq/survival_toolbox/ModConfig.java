@@ -161,6 +161,7 @@ public class ModConfig {
         // 统一适应
         public final ForgeConfigSpec.IntValue adaptTime;
         public final ForgeConfigSpec.DoubleValue adaptTimeReduction;
+        public final ForgeConfigSpec.BooleanValue adaptBlockScreenEffects;
 
         // 恢复相关
         public final ForgeConfigSpec.DoubleValue adaptHealMultiplier;
@@ -240,6 +241,9 @@ public class ModConfig {
             adaptTimeReduction = builder
                     .comment("每层减少适应秒数（最低1秒，例如：基础10秒，层数100，减少1秒，则需9秒适应）")
                     .defineInRange("adaptTimeReduction", DEFAULT_ADAPT_TIME_REDUCTION, 0, 100);
+            adaptBlockScreenEffects = builder
+                    .comment("免疫燃烧效果和液体迷雾后，屏蔽所有屏幕视觉效果（失明黑雾/火焰红屏/水雾/冰冻/传送门等），对自定义渲染的模组效果不一定生效")
+                    .define("adaptBlockScreenEffects", true);
             adaptHealMultiplier = builder
                     .comment("每次恢复时，每层恢复的生命值比例")
                     .defineInRange("adaptHealMultiplier", DEFAULT_ADAPT_HEAL_MULTIPLIER, 0, 100);

@@ -4,10 +4,18 @@ import com.zzq.survival_toolbox.block.entity.GuardianLanternBlockEntity;
 import com.zzq.survival_toolbox.client.gui.MainConfigScreen;
 import com.zzq.survival_toolbox.command.AdaptCommand;
 import com.zzq.survival_toolbox.command.BloodthirstyCommand;
+import com.zzq.survival_toolbox.entity.AnvilOrbProjectile;
+import com.zzq.survival_toolbox.entity.CapturedEntityProjectile;
 import com.zzq.survival_toolbox.listener.*;
 import com.zzq.survival_toolbox.network.*;
 import com.zzq.survival_toolbox.registry.*;
+import net.minecraft.core.Position;
+import net.minecraft.core.dispenser.AbstractProjectileDispenseBehavior;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.DispenserBlock;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
@@ -15,6 +23,7 @@ import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.client.ConfigScreenHandler;
 import net.minecraftforge.network.NetworkDirection;
@@ -33,7 +42,7 @@ import java.util.Optional;
 public class SurvivalToolbox {
 
     public static final String MODID = "zzq_survival_toolbox";
-    public static final String NETWORK_VERSION = "1.0";
+    public static final String NETWORK_VERSION = "1.2";
 
     /**
      * 网络通道：所有客户端↔服务端通信均通过此通道传输
@@ -125,6 +134,62 @@ public class SurvivalToolbox {
                 SyncRecipeIndexProgressPacket::decode,
                 SyncRecipeIndexProgressPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+
+        CHANNEL.registerMessage(id++, PocketDimensionSyncPacket.class,
+                PocketDimensionSyncPacket::encode,
+                PocketDimensionSyncPacket::decode,
+                PocketDimensionSyncPacket::handle);
+
+        CHANNEL.registerMessage(id++, PocketDimensionSearchPacket.class,
+                PocketDimensionSearchPacket::encode,
+                PocketDimensionSearchPacket::decode,
+                PocketDimensionSearchPacket::handle);
+
+        CHANNEL.registerMessage(id++, PocketDimensionPageActionPacket.class,
+                PocketDimensionPageActionPacket::encode,
+                PocketDimensionPageActionPacket::decode,
+                PocketDimensionPageActionPacket::handle);
+
+        CHANNEL.registerMessage(id++, PocketQuickDepositPacket.class,
+                PocketQuickDepositPacket::encode,
+                PocketQuickDepositPacket::decode,
+                PocketQuickDepositPacket::handle);
+
+        // ---- 发射器行为：铁砧球与捕获实体放入发射器后，红石触发等同右键投掷 ----
+        // 注册需在 FMLCommonSetupEvent（注册表填充完成后）执行；
+        // 构造函数里 RegistryObject 尚未就绪，直接 .get() 会抛 "Registry Object not present"。
+        modEventBus.addListener(SurvivalToolbox::onCommonSetup);
+    }
+
+    /**
+     * 通用初始化（注册表已填充）：注册发射器行为。
+     * <p>
+     * 铁砧球与捕获实体放入发射器后，红石触发等同右键投掷：
+     * 按发射器朝向发射弹射物（默认威力 1.1、散布 6.0、发射音效），每发消耗 1 个。
+     * </p>
+     *
+     * @param event 通用初始化事件
+     */
+    private static void onCommonSetup(FMLCommonSetupEvent event) {
+        event.enqueueWork(() -> {
+            DispenserBlock.registerBehavior(ModItems.CAPTURED_ENTITY.get(), new AbstractProjectileDispenseBehavior() {
+                @Override
+                protected Projectile getProjectile(Level level, Position position, ItemStack stack) {
+                    CapturedEntityProjectile projectile = new CapturedEntityProjectile(level, position.x(), position.y(), position.z());
+                    projectile.setCapturedData(stack);
+                    return projectile;
+                }
+            });
+
+            DispenserBlock.registerBehavior(ModItems.ANVIL_ORB.get(), new AbstractProjectileDispenseBehavior() {
+                @Override
+                protected Projectile getProjectile(Level level, Position position, ItemStack stack) {
+                    AnvilOrbProjectile projectile = new AnvilOrbProjectile(level, position.x(), position.y(), position.z());
+                    projectile.setItem(stack);
+                    return projectile;
+                }
+            });
+        });
     }
 
     /**
@@ -147,6 +212,52 @@ public class SurvivalToolbox {
     public void onRegisterCommands(RegisterCommandsEvent event) {
         AdaptCommand.register(event.getDispatcher());
         BloodthirstyCommand.register(event.getDispatcher());
+    }
+
+    /**
+     * 死亡不掉落次元袋：从掉落物列表移除并放回背包。
+     * 1.20.1 Forge 玩家死亡掉落统一走 LivingDropsEvent
+     * （Forge patch 的 dropAllDeathLoot 用 captureDrops 捕获背包+装备全部物品后触发）。
+     * 配合 ItemEntityMixin 的环境伤害免疫，袋子不会因死亡/爆炸/火焰而丢失。
+     */
+    @SubscribeEvent
+    public void onLivingDrops(net.minecraftforge.event.entity.living.LivingDropsEvent event) {
+        if (!(event.getEntity() instanceof net.minecraft.world.entity.player.Player player)) return;
+        if (player.level().isClientSide) return;
+        java.util.Collection<net.minecraft.world.entity.item.ItemEntity> drops = event.getDrops();
+        for (java.util.Iterator<net.minecraft.world.entity.item.ItemEntity> it = drops.iterator(); it.hasNext(); ) {
+            net.minecraft.world.entity.item.ItemEntity entity = it.next();
+            if (entity.getItem().is(ModItems.POCKET_DIMENSION.get())) {
+                it.remove();
+                if (!player.getInventory().add(entity.getItem())) {
+                    // 背包满的极端情况：掉到脚边，至少不消失
+                    player.drop(entity.getItem(), false, false);
+                }
+            }
+        }
+    }
+
+    /**
+     * 重生时把次元袋从旧玩家背包转移给新玩家。
+     * 死亡掉落关闭 keepInventory 时重生不会复制背包，
+     * 袋子（死亡时被 InventoryMixin 留在旧背包）会随旧实体销毁而消失，
+     * 这里在 Clone 事件中手动转移，确保重生后袋子一定在背包里。
+     */
+    @SubscribeEvent
+    public void onPlayerClone(net.minecraftforge.event.entity.player.PlayerEvent.Clone event) {
+        if (!event.isWasDeath()) return;
+        net.minecraft.world.entity.player.Player original = event.getOriginal();
+        net.minecraft.world.entity.player.Player player = event.getEntity();
+        if (original.level().isClientSide) return;
+        for (int i = 0; i < original.getInventory().items.size(); i++) {
+            net.minecraft.world.item.ItemStack stack = original.getInventory().items.get(i);
+            if (!stack.isEmpty() && stack.is(ModItems.POCKET_DIMENSION.get())) {
+                original.getInventory().items.set(i, net.minecraft.world.item.ItemStack.EMPTY);
+                if (!player.getInventory().add(stack)) {
+                    // 新玩家已有袋子（keepInventory 复制）或背包满：丢弃旧的，避免重复
+                }
+            }
+        }
     }
 
     /**
