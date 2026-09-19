@@ -124,6 +124,11 @@ public class AdaptationEventHandler {
             AdaptationHelper.applyRestore(entity);
         }
 
+        // ②④ 攒在内存里的护盾值 / 适应计时每秒落盘一次（不再每 tick 写物品 NBT、也不再每 tick 触发装备重同步）
+        for (ItemStack armor : armors) {
+            AdaptationHelper.flushPendingAdaptIfDue(armor, entity.tickCount);
+        }
+
         // 推送最新自适应数据给客户端：
         // 护盾恢复中每 2 tick 一次（丝滑），护盾满时每秒一次（同步层数/适应标记变化）
         boolean shouldSync = shieldRestored ? entity.tickCount % 2 == 0 : entity.tickCount % 20 == 0;
@@ -307,7 +312,86 @@ public class AdaptationEventHandler {
                 }
             }
         }
+
+        // ---- 口渴模糊适应（LSO 低水分时糊屏的那个后处理）----
+        // 设计约定：不做"一穿上就直接抵消"，而是逐步累积适应。
+        // 所以这里**只负责攒适应时间**（和火焰/夜视/迷雾同一套阈值），
+        // "逐步变淡"在客户端 LsoThirstBlurMixin 里按进度缩放 LSO 的模糊强度。
+        if (isThirstBlurred(entity)) {
+            boolean anyThirstAdapted = false;
+            for (ItemStack armor : armors) {
+                if (AdaptationHelper.isThirstBlurAdapted(armor)) {
+                    anyThirstAdapted = true;
+                    break;
+                }
+            }
+            if (!anyThirstAdapted) {
+                for (ItemStack armor : armors) {
+                    if (!AdaptationHelper.isThirstBlurAdapted(armor)) {
+                        AdaptationHelper.addThirstBlurExposureTime(armor, 1);
+                    }
+                }
+                if (AdaptationHelper.getThirstBlurExposureTime(armors.get(0))
+                        >= AdaptationHelper.adaptThresholdTicks(entity)) {
+                    for (ItemStack armor : armors) {
+                        if (!AdaptationHelper.isThirstBlurAdapted(armor)) {
+                            AdaptationHelper.markThirstBlurAdapted(armor);
+                        }
+                    }
+                    if (entity instanceof Player player) {
+                        player.sendSystemMessage(Component.translatable(
+                                "message.zzq_survival_toolbox.adaptation.thirst_adapted"
+                        ));
+                    }
+                }
+            }
+        }
     }
+
+    /**
+     * 现在是不是"低水分到会被 LSO 糊屏"的状态（服务端判定，用来攒口渴模糊的适应时间）。
+     * <p>
+     * ⚠️ 全部走<b>反射</b>读 LSO：
+     * <ul>
+     *   <li>阈值来自 {@code RenderBlurOverlay.HYDRATION_LEVEL_MIN_EFFECT}（private static final，只能反射；读不到用 6）；</li>
+     *   <li>水分来自 {@code CapabilityUtil.getThirstCapability(player).getHydrationLevel()}。</li>
+     * </ul>
+     * LSO 是软依赖：没装 / 接口变了，反射就失败 → 返回 false（这条适应通道自然不攒），绝不报错、绝不崩服务端。
+     * </p>
+     */
+    private static boolean isThirstBlurred(LivingEntity entity) {
+        if (!(entity instanceof Player player) || entity.level().isClientSide) return false;
+        try {
+            Class<?> util = Class.forName("sfiomn.legendarysurvivaloverhaul.util.CapabilityUtil");
+            Object cap = util.getMethod("getThirstCapability", Player.class).invoke(null, player);
+            if (cap == null) return false;
+            Object hydration = cap.getClass().getMethod("getHydrationLevel").invoke(cap);
+            return hydration instanceof Integer h && h <= thirstBlurThreshold();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** LSO 开始糊屏的水分阈值（反射读它的私有常量；读不到就用 6 —— LSO 2.3.23.1 的默认值） */
+    private static int thirstBlurThreshold() {
+        if (THIRST_BLUR_THRESHOLD < 0) {
+            int value = 6;
+            try {
+                java.lang.reflect.Field f = Class.forName(
+                                "sfiomn.legendarysurvivaloverhaul.client.render.RenderBlurOverlay")
+                        .getDeclaredField("HYDRATION_LEVEL_MIN_EFFECT");
+                f.setAccessible(true);
+                if (f.get(null) instanceof Integer i) value = i;
+            } catch (Throwable ignored) {
+                // 没装 LSO / 常量改名：用默认值，isThirstBlurred 那边同样会失败
+            }
+            THIRST_BLUR_THRESHOLD = value;
+        }
+        return THIRST_BLUR_THRESHOLD;
+    }
+
+    /** 缓存的"开始糊屏的水分阈值"（-1 = 还没读过） */
+    private static int THIRST_BLUR_THRESHOLD = -1;
 
     // ============================================================
     // 死亡复活
@@ -316,6 +400,8 @@ public class AdaptationEventHandler {
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onLivingDeath(LivingDeathEvent event) {
         LivingEntity entity = event.getEntity();
+        // ② 死亡是关键时机：护盾先落盘到物品上（死亡后盔甲会掉出来，掉了也得带着最新护盾）
+        AdaptationHelper.flushPendingAdapt(entity);
 
         int adaptLevel = getAdaptationLevel(entity);
         if (adaptLevel <= 0) return;
@@ -340,8 +426,12 @@ public class AdaptationEventHandler {
             }
 
             AdaptationHelper.updateFlightAbility(entity);
+            // ② 死亡复活是关键时机：层数刚被扣（护盾上限跟着降），立刻落盘
+            AdaptationHelper.flushPendingAdapt(entity);
 
-            if (entity instanceof Player player) {
+            // 复活提示与叠层提示共用同一开关：复活同样会改变层数，提示一并可控
+            if (entity instanceof Player player
+                    && ModConfig.CLIENT.enableAdaptationLayerMessage.get()) {
                 player.sendSystemMessage(Component.translatable(
                         "message.zzq_survival_toolbox.adaptation.revive",
                         reviveCost
@@ -386,5 +476,59 @@ public class AdaptationEventHandler {
         if (slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR) return;
         AdaptationHelper.updateFlightAbility(entity);
         AdaptationHelper.updateisNightAbility(entity);
+        // ② 换甲是关键时机：卸下来那件的护盾/计时立刻落盘，别留内存里跟着新甲跑
+        AdaptationHelper.flushPendingAdapt(event.getFrom());
+        AdaptationHelper.flushPendingAdapt(event.getTo());
+        // ③ 客户端身上换了一件新物品，同步记录作废，下一次一定推给它
+        AdaptationHelper.invalidateSyncCache((Player) entity);
+    }
+
+    // ============================================================
+    // ② 关键时机落盘 + ③ 重新入场全量同步
+    // ============================================================
+
+    @SubscribeEvent
+    public static void onPlayerLoggedIn(
+            net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof Player player && !player.level().isClientSide()) {
+            AdaptationHelper.syncAdaptationDataToClient(player, true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onPlayerLoggedOut(
+            net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
+        AdaptationHelper.flushPendingAdapt(event.getEntity());
+    }
+
+    @SubscribeEvent
+    public static void onPlayerRespawn(
+            net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerRespawnEvent event) {
+        if (event.getEntity() instanceof Player player && !player.level().isClientSide()) {
+            // ③ 复活后客户端身上是全新物品：必须无条件全量推一次，否则护盾条会一直显示 0
+            AdaptationHelper.syncAdaptationDataToClient(player, true);
+            AdaptationHelper.flushPendingAdapt(player);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onPlayerChangedDimension(
+            net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (event.getEntity() instanceof Player player && !player.level().isClientSide()) {
+            AdaptationHelper.flushPendingAdapt(player);
+            AdaptationHelper.syncAdaptationDataToClient(player, true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onEntityLeaveLevel(net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent event) {
+        if (event.getEntity() instanceof LivingEntity living) {
+            AdaptationHelper.flushPendingAdapt(living);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onServerStopping(net.neoforged.neoforge.event.server.ServerStoppingEvent event) {
+        AdaptationHelper.flushAllPendingAdapt();
     }
 }

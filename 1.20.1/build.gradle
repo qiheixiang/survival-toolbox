@@ -66,15 +66,29 @@ repositories {
         name = "ParchmentMC"
         url = "https://maven.parchmentmc.org/"
     }
+    // JEI（BlameJared 仓库）：仅编译期依赖，运行时不打包、不强制
+    maven {
+        name = "BlameJared"
+        url = "https://maven.blamejared.com/"
+    }
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
-    // 编译期依赖：仅用于 Mixin 注解处理器校验 @Mixin(targets) 目标类，不打包进模组。
-    // jar 位于 libs/ 目录，来源与说明见 libs/README.md。
+    // flywheel（Create 内置渲染引擎）+ Embeddium/Sodium：仅编译期（mixin AP 校验 targets），不打包
     compileOnly files('libs/flywheel-forge-1.20.1-1.0.4.jar')
     compileOnly files('libs/embeddium-0.3.31+mc1.20.1.jar')
+    // 传奇生存改革（Legendary Survival Overhaul）：仅编译期。作用有两个：
+    //   ① 让 mixin AP 能校验 LsoThirstBlurMixin 的目标（否则它会因为"target could not be found"直接报错，
+    //      而 Java 编译期又不可能把整合包里的 jar 当依赖）；
+    //   ② 目标类/字段名写错时能在构建阶段就发现。
+    // 运行时不依赖、不打包：整合包没装 LSO 时 LsoThirstBlurMixin 被 require=0 安静跳过。
+    compileOnly files('libs/legendarysurvivaloverhaul-1.20.1-2.3.23.1.jar')
+    // JEI：配方转移（"+"号）适配。只声明编译期 API，运行时不依赖、不打包——
+    // 整合包没装 JEI 时插件类不会被加载，模组照常工作。
+    compileOnly "mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"
+    compileOnly "mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}"
 }
 
 // ========== Mixin 配置 ==========
@@ -85,6 +99,9 @@ mixin {
 // ================================
 
 tasks.named('processResources', ProcessResources).configure {
+    // ⚠️ 必须显式指 UTF-8：Groovy 的 expand 默认按**平台默认编码**写文件，
+    //    在中文 Windows（GBK）上会把 mod 名/描述写成 GBK 字节 → 游戏里显示乱码
+    filteringCharset = "UTF-8"
     var replaceProperties = [
             minecraft_version: minecraft_version, minecraft_version_range: minecraft_version_range,
             forge_version: forge_version, forge_version_range: forge_version_range,

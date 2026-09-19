@@ -18,7 +18,8 @@ import net.minecraft.world.phys.Vec3;
 /**
  * 除你装备（缴械法杖）
  * <p>
- * 右键怪物可卸下其所有装备（手持物品和全部盔甲）。
+ * 右键怪物可卸下其所有装备：手持物品 + 全部盔甲；整合包装了饰品栏 mod（Curios）时
+ * <b>连饰品一并卸下</b>（见 {@link com.zzq.survival_toolbox.util.CuriosCompat}）。
  * 潜行时使用，装备掉落至玩家脚下；否则掉落至怪物脚下。
  * </p>
  */
@@ -65,6 +66,14 @@ public class DisarmStaffItem extends Item {
             ItemStack disarmedItem = slotStack.copy();
             target.setItemSlot(slot, ItemStack.EMPTY);
             dropToPosition(level, dropPos, disarmedItem);
+            hasDisarmed = true;
+        }
+
+        // 饰品（Curios）：整合包装了饰品栏 mod 时，连饰品一并卸下。
+        // 没装的包（比如两个测试包）这里是空列表，行为与以前一模一样；
+        // ⚠️ 全程反射，见 CuriosCompat 的类注释（1.20.1 与 1.21.1 的 Curios 返回值形态不同）。
+        for (ItemStack curio : com.zzq.survival_toolbox.util.CuriosCompat.takeAll(target)) {
+            dropToPosition(level, dropPos, curio);
             hasDisarmed = true;
         }
 

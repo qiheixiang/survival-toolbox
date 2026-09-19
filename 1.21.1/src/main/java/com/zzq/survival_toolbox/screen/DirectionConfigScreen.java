@@ -250,7 +250,6 @@ public class DirectionConfigScreen extends AbstractContainerScreen<DirectionConf
             btnModeToggle.setMessage(getModeText(config.getMode()));
         }
 
-        renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         renderTooltip(guiGraphics, mouseX, mouseY);
 

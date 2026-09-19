@@ -3,6 +3,7 @@ package com.zzq.survival_toolbox.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.zzq.survival_toolbox.ModConfig;
 import com.zzq.survival_toolbox.util.AdaptationHelper;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -19,7 +20,9 @@ import java.util.List;
  * <ul>
  *   <li>{@code get} - 显示当前自适应总层数</li>
  *   <li>{@code set &lt;layers&gt;} - 设置每件盔甲的自适应层数</li>
+ *   <li>{@code set max} - 直接设成配置里的最大层数（{@code ModConfig adaptMaxLayers}）</li>
  *   <li>{@code add &lt;layers&gt;} - 增加每件盔甲的自适应层数</li>
+ *   <li>{@code add max} - 直接增加"最大层数"那么多（与手动输入该数字等价）</li>
  * </ul>
  * </p>
  */
@@ -32,11 +35,19 @@ public class AdaptCommand {
                                 .executes(AdaptCommand::getLayers)
                         )
                         .then(Commands.literal("set")
+                                // /adapt set max = 直接用配置里的最大层数
+                                .then(Commands.literal("max")
+                                        .executes(AdaptCommand::setLayersMax)
+                                )
                                 .then(Commands.argument("layers", FloatArgumentType.floatArg(0))
                                         .executes(AdaptCommand::setLayers)
                                 )
                         )
                         .then(Commands.literal("add")
+                                // /adapt add max = 直接增加"最大层数"那么多
+                                .then(Commands.literal("max")
+                                        .executes(AdaptCommand::addLayersMax)
+                                )
                                 .then(Commands.argument("layers", FloatArgumentType.floatArg())
                                         .executes(AdaptCommand::addLayers)
                                 )
@@ -56,13 +67,21 @@ public class AdaptCommand {
         return 1;
     }
 
+    /** {@code /adapt set max}：直接用配置里的最大层数（{@code ModConfig.CLIENT.adaptMaxLayers}） */
+    private static int setLayersMax(CommandContext<CommandSourceStack> ctx) {
+        return setLayersTo(ctx.getSource(), ModConfig.CLIENT.adaptMaxLayers.get().floatValue());
+    }
+
     private static int setLayers(CommandContext<CommandSourceStack> ctx) {
-        CommandSourceStack source = ctx.getSource();
+        return setLayersTo(ctx.getSource(), FloatArgumentType.getFloat(ctx, "layers"));
+    }
+
+    /** set 的公共实现：普通数值和 max 走同一条路，行为完全一致 */
+    private static int setLayersTo(CommandSourceStack source, float value) {
         if (!(source.getEntity() instanceof Player player)) {
             source.sendFailure(Component.literal("只有玩家可以使用此命令"));
             return 0;
         }
-        float value = FloatArgumentType.getFloat(ctx, "layers");
         List<ItemStack> armors = AdaptationHelper.getAdaptationArmors(player);
         if (armors.isEmpty()) {
             source.sendFailure(Component.literal("你没有穿戴任何自适应盔甲"));
@@ -77,13 +96,21 @@ public class AdaptCommand {
         return 1;
     }
 
+    /** {@code /adapt add max}：直接增加"最大层数"那么多（与手动输入该数字等价） */
+    private static int addLayersMax(CommandContext<CommandSourceStack> ctx) {
+        return addLayersTo(ctx.getSource(), ModConfig.CLIENT.adaptMaxLayers.get().floatValue());
+    }
+
     private static int addLayers(CommandContext<CommandSourceStack> ctx) {
-        CommandSourceStack source = ctx.getSource();
+        return addLayersTo(ctx.getSource(), FloatArgumentType.getFloat(ctx, "layers"));
+    }
+
+    /** add 的公共实现 */
+    private static int addLayersTo(CommandSourceStack source, float addValue) {
         if (!(source.getEntity() instanceof Player player)) {
             source.sendFailure(Component.literal("只有玩家可以使用此命令"));
             return 0;
         }
-        float addValue = FloatArgumentType.getFloat(ctx, "layers");
         List<ItemStack> armors = AdaptationHelper.getAdaptationArmors(player);
         if (armors.isEmpty()) {
             source.sendFailure(Component.literal("你没有穿戴任何自适应盔甲"));

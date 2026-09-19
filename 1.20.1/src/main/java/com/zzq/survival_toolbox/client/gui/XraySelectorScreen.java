@@ -44,11 +44,43 @@ public class XraySelectorScreen extends Screen {
     private boolean draggingScroll = false;
     /** 只看已开启的方块 */
     private boolean showEnabledOnly = false;
+    /** 打开本菜单时手持眼镜的那只手：菜单只改"这一副"眼镜的列表 */
+    private final net.minecraft.world.InteractionHand hand;
+    /** 已开启方块集合缓存（仅在物品 NBT 变化时重建） */
+    private java.util.Set<ResourceLocation> enabledCache = null;
+    private net.minecraft.nbt.CompoundTag enabledCacheTag = null;
 
-    public XraySelectorScreen() {
+    public XraySelectorScreen(net.minecraft.world.InteractionHand hand) {
         super(Component.translatable("gui.zzq_survival_toolbox.xray.title"));
+        this.hand = hand;
         this.blockIds = XrayOreHelper.getAllBlockIds();
         this.filteredBlocks = blockIds;
+    }
+
+    /** 当前菜单操作的那副眼镜（每帧实时取，服务端同步后立即反映） */
+    private ItemStack goggles() {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player == null) return ItemStack.EMPTY;
+        return mc.player.getItemInHand(this.hand);
+    }
+
+    /**
+     * 当前眼镜的"已开启方块"集合，带缓存。
+     * <p>
+     * 全注册表方块数量可达上万，"只看已开启"过滤与每帧绘制的底色/计数若逐个
+     * 解析物品 NBT 会造成明显卡顿；此处只在物品 NBT 变化时重建一次。
+     * </p>
+     */
+    private java.util.Set<ResourceLocation> enabledSet() {
+        ItemStack goggles = goggles();
+        net.minecraft.nbt.CompoundTag tag = goggles.isEmpty() ? null : goggles.getTag();
+        boolean changed = enabledCache == null
+                || (tag == null ? enabledCacheTag != null : !tag.equals(enabledCacheTag));
+        if (changed) {
+            enabledCacheTag = tag == null ? null : tag.copy();
+            enabledCache = XrayOreHelper.getEnabledBlocks(goggles);
+        }
+        return enabledCache;
     }
 
     @Override
@@ -81,8 +113,10 @@ public class XraySelectorScreen extends Screen {
 
     private void applyFilter() {
         String q = this.searchBox.getValue().toLowerCase(Locale.ROOT);
+        // 只在这里取一次已开启集合，避免对上万个方块逐个解析 NBT
+        java.util.Set<ResourceLocation> enabled = showEnabledOnly ? enabledSet() : null;
         this.filteredBlocks = blockIds.stream()
-                .filter(id -> !showEnabledOnly || XrayOreHelper.isEnabled(id))
+                .filter(id -> enabled == null || enabled.contains(id))
                 .filter(id -> {
                     if (q.isEmpty()) return true;
                     if (id.toString().contains(q)) return true;
@@ -106,9 +140,10 @@ public class XraySelectorScreen extends Screen {
         this.scrollOffset = Mth.clamp(this.scrollOffset, 0, maxScroll);
 
         int visible = Math.min(VISIBLE_ROWS, filteredBlocks.size() - scrollOffset);
+        java.util.Set<ResourceLocation> enabledSet = enabledSet();
         for (int i = 0; i < visible; i++) {
             ResourceLocation id = filteredBlocks.get(scrollOffset + i);
-            boolean enabled = XrayOreHelper.isEnabled(id);
+            boolean enabled = enabledSet.contains(id);
             int rowY = listY + i * ROW_HEIGHT;
 
             if (mouseX >= listX && mouseX <= listX + LIST_WIDTH && mouseY >= rowY && mouseY < rowY + ROW_HEIGHT) {
@@ -127,7 +162,7 @@ public class XraySelectorScreen extends Screen {
         gui.fill(listX, listY + visible * ROW_HEIGHT, listX + LIST_WIDTH, listY + visible * ROW_HEIGHT + 1, 0xFF555555);
         gui.drawCenteredString(this.font,
                 Component.translatable("gui.zzq_survival_toolbox.xray.summary",
-                        filteredBlocks.size(), XrayOreHelper.enabledCount()),
+                        filteredBlocks.size(), enabledSet.size()),
                 this.width / 2, listY + visible * ROW_HEIGHT + 8, 0xAAAAAA);
         gui.drawCenteredString(this.font,
                 Component.translatable("gui.zzq_survival_toolbox.xray.hint"),
@@ -174,12 +209,13 @@ public class XraySelectorScreen extends Screen {
                     && mouseX >= listX && mouseX <= listX + LIST_WIDTH
                     && mouseY >= listY && mouseY < listY + VISIBLE_ROWS * ROW_HEIGHT) {
                 this.setFocused(null);
-                XrayOreHelper.toggle(filteredBlocks.get(row));
-                // 立即重编译区块，让开关即时生效
-                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-                if (mc.level != null) {
-                    mc.levelRenderer.allChanged();
-                }
+                // 改的是这一类物品自己的 NBT：交给服务端写入并同步回来，
+                // 客户端不自行修改（否则会被服务端同步覆盖）。区块重编译由
+                // XrayClientHandler 在白名单真正变化时统一触发。
+                com.zzq.survival_toolbox.SurvivalToolbox.CHANNEL.sendToServer(
+                        new com.zzq.survival_toolbox.network.XrayToggleBlockPacket(
+                                this.hand == net.minecraft.world.InteractionHand.OFF_HAND ? 1 : 0,
+                                filteredBlocks.get(row)));
                 return true;
             }
         }

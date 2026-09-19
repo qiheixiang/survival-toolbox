@@ -37,6 +37,9 @@ public class PocketSlot extends Slot {
 
     @Override
     public boolean mayPickup(Player player) {
-        return true;
+        // 流体格上的"桶"只是显示图标：任何路径都不能把它当真物品拿走，否则等于刷桶。
+        // 尤其要点名原版"双击收集"（ClickType.PICKUP_ALL）：它遍历所有槽位时只看 mayPickup
+        // （已核对 1.21.1 AbstractContainerMenu 第 499~511 行），不看 isActive / 悬停。
+        return !this.pocket.isFluidSlot(this.getSlotIndex());
     }
 }

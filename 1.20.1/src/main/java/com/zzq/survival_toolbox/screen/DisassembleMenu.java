@@ -77,6 +77,18 @@ public class DisassembleMenu extends AbstractContainerMenu {
             new java.util.concurrent.ConcurrentHashMap<>();
     private static final java.util.concurrent.ConcurrentMap<Item, List<Recipe<?>>> RECIPES_BY_INGREDIENT =
             new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 全部锻造（Smithing）配方。
+     * <p>
+     * 锻造配方的材料可能枚举不出来（部分模组自定义实现未重写 getIngredients），
+     * 那样就进不了"材料→配方"索引，合成页永远看不到锻造配方。这里单独留一份列表，
+     * 用 {@code isTemplateIngredient/isBaseIngredient/isAdditionIngredient} 三个角色判定
+     * 直接匹配九宫格，与材料能否枚举、摆放位置都无关。
+     * </p>
+     */
+    private static final java.util.List<Recipe<?>> SMITHING_RECIPES =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
     /** 阶段一：产出→配方 索引已就绪（拆解可用） */
     private static volatile boolean recipeIndexOutputReady = false;
     /** 阶段二：材料→配方 索引已就绪（合成可用） */
@@ -123,9 +135,29 @@ public class DisassembleMenu extends AbstractContainerMenu {
     private boolean isTakingResult = false;
 
     private List<ItemStack> currentProductList = new ArrayList<>();
+    /**
+     * 额外的"中心/激活/催化"材料（每次解析配方时重建，只用于填九宫格）。
+     * <p>
+     * ⚠️ 规则：拆解方向上这些**就是配方的一部分，照常返还** ——
+     * 拆一件用它们做出来的成品，应该连中心物品一起还回来（诡厄巫法祭坛的"中间黑暗魔杖"就是这种）。
+     * 所以九宫格后半那几格**既能拿也能放**，`performDisassemble` / 全部拆解也都会把它们发出去。
+     * （合成方向不需要特别处理：那边九宫格里本来就是玩家自己摆的材料。）
+     * </p>
+     */
+    private static final java.util.Map<Object, List<ItemStack>> EXTRA_DISPLAY = java.util.Collections.synchronizedMap(new java.util.IdentityHashMap<>());
     public boolean isButtonMode = false;
     private final DataSlot buttonModeDataSlot = DataSlot.standalone();
     private ItemStack[] previousMiddleStacks = new ItemStack[9];
+
+    /**
+     * 产物结算结果（{@link #performDisassemble()} / {@link #performCraft()} 这一轮到底成没成）。
+     * <p>
+     * 给"次元袋里的拆解页"用：那边不能拿"槽 10 是不是空了"当成功判据——合成成功但九宫格里
+     * 还剩材料时，原版会把产物重新画回槽 10（预览），于是判据永远不成立、产物永远拿不到
+     * （实测：材料被消耗却拿不到产物，只有最后一次能拿出来）。
+     * </p>
+     */
+    private boolean lastSettleOk = false;
 
     private final DataSlot disassembleIndexSlot = DataSlot.standalone();
     private final DataSlot disassembleTotalSlot = DataSlot.standalone();
@@ -255,7 +287,20 @@ public class DisassembleMenu extends AbstractContainerMenu {
             @Override
             public void setChanged() {
                 super.setChanged();
-                onLeftSlotChanged();
+                // ⚠️⚠️ 这里必须兜住 **Throwable**（不只是 Exception），而且要打日志：
+                //      往拆解台/袋子里的拆解页放东西走的就是这里。大整合包里某个 mod 的配方一旦触发
+                //      Error（NoSuchMethodError / AbstractMethodError / NoClassDefFoundError 这类），
+                //      它**不**属于 Exception，会一路穿到服务端 tick 上直接把游戏带走（1.21.1 那边实测会闪退）。
+                //      兜住之后最多是"这一件物品找不到拆解配方"，并且日志里留下是哪个配方干的，绝不会闪退。
+                try {
+                    onLeftSlotChanged();
+                } catch (Throwable t) {
+                    com.mojang.logging.LogUtils.getLogger().error(
+                            "[次元袋·拆解台] 处理输入槽时出错（已兜住，不影响游戏）：物品={}",
+                            container.getItem(0), t);
+                    for (int i = 1; i <= 9; i++) container.setItem(i, ItemStack.EMPTY);
+                    container.setItem(10, ItemStack.EMPTY);
+                }
             }
         });
 
@@ -441,7 +486,12 @@ public class DisassembleMenu extends AbstractContainerMenu {
 
     private static ItemStack getRecipeOutput(Object recipeOrData, RegistryAccess access) {
         try {
-            if (recipeOrData instanceof BrewingRecipe br) return br.getOutput();
+            // ⚠️ 一律 copy：模组配方的 getResultItem / getOutput 很可能**直接把内部那个栈交给调用方**
+            //（实测 Create 的 ProcessingRecipe#getResultItem 就是 getRollableResults().getFirst().getStack()，
+            //  连 assemble 都没 copy）—— 不复制的话，玩家从产物格拿走/扣数量会把**配方本体**改掉：
+            //  JEI 界面上那个产物当场变空，只有重进世界才恢复（实测：一个青金石出两个蓝色染料，
+            //  拿走之后 Create 的研磨配方里那两条蓝染料就没了）。
+            if (recipeOrData instanceof BrewingRecipe br) return br.getOutput().copy();
             if (recipeOrData instanceof Recipe<?> r) return r.getResultItem(access).copy();
         } catch (Exception ignored) {
             // 部分模组配方读取结果时可能被 AllTheLeaks 等性能模组拦截抛异常，优雅跳过。
@@ -466,12 +516,14 @@ public class DisassembleMenu extends AbstractContainerMenu {
                 }
                 ItemStack assembled = crafting.assemble(input, access);
                 if (!assembled.isEmpty()) {
+                    assembled = assembled.copy();     // ⚠️ 模组配方的 assemble 可能把内部栈直接交给调用方（见 getRecipeOutput 的说明）
                     copyStateFromMatchingInput(assembled);
                     return assembled;
                 }
             } else if (recipe instanceof SmithingRecipe smithing) {
                 ItemStack assembled = assembleSmithingOutput(smithing, access);
                 if (!assembled.isEmpty()) {
+                    assembled = assembled.copy();
                     copyStateFromMatchingInput(assembled);
                     return assembled;
                 }
@@ -503,6 +555,13 @@ public class DisassembleMenu extends AbstractContainerMenu {
      * 保留基础物品的附魔/NBT（与原版锻造台一致）。匹配不齐时返回空。
      */
     private ItemStack assembleSmithingOutput(SmithingRecipe smithing, RegistryAccess access) {
+        // 优先用配方自己的角色判定挑出 模板/基础/材料：与摆放位置、材料能否枚举都无关
+        ItemStack[] byRole = pickSmithingRoleItems(smithing);
+        if (byRole != null) {
+            return assembleSmithingWith(smithing, byRole, access);
+        }
+
+        // 回退：按配方材料顺序在九宫格里对号入座（角色判定不可用的老式实现）
         List<Ingredient> smithIngs = getIngredientsFromRecipe(smithing);
         if (smithIngs.size() < 3) return ItemStack.EMPTY;
         boolean[] used = new boolean[9];
@@ -520,11 +579,42 @@ public class DisassembleMenu extends AbstractContainerMenu {
             }
             if (ordered[slot] == null) return ItemStack.EMPTY;
         }
+        return assembleSmithingWith(smithing, ordered, access);
+    }
+
+    /** 用 模板/基础/材料 三件（顺序固定）调用配方组装 */
+    private ItemStack assembleSmithingWith(SmithingRecipe smithing, ItemStack[] items, RegistryAccess access) {
         SimpleContainer input = new SimpleContainer(3);
-        input.setItem(0, ordered[0]);
-        input.setItem(1, ordered[1]);
-        input.setItem(2, ordered[2]);
-        return smithing.assemble(input, access);
+        input.setItem(0, items[0]);
+        input.setItem(1, items[1]);
+        input.setItem(2, items[2]);
+        // 同样复制：把配方自己的栈交出去会被玩家的取走动作改坏（见 getRecipeOutput 的说明）
+        return smithing.assemble(input, access).copy();
+    }
+
+    /**
+     * 按角色从九宫格挑出 模板/基础/材料 三件（顺序即 模板、基础、材料）。
+     * <p>
+     * 位置无关：只看物品是否符合该配方的某个角色，因此在九宫格里怎么摆都能合成，
+     * 也兼容 JEI 直接把三格材料填进九宫格的用法。
+     * </p>
+     *
+     * @return 长度 3 的数组；凑不齐三件时返回 {@code null}
+     */
+    private ItemStack[] pickSmithingRoleItems(SmithingRecipe smithing) {
+        ItemStack[] result = new ItemStack[3];
+        for (int i = 1; i <= 9; i++) {
+            ItemStack s = container.getItem(i);
+            if (s.isEmpty()) continue;
+            if (result[0] == null && smithing.isTemplateIngredient(s)) {
+                result[0] = s.copy();
+            } else if (result[1] == null && smithing.isBaseIngredient(s)) {
+                result[1] = s.copy();
+            } else if (result[2] == null && smithing.isAdditionIngredient(s)) {
+                result[2] = s.copy();
+            }
+        }
+        return result[0] != null && result[1] != null && result[2] != null ? result : null;
     }
 
     /** 复制输入物品的状态（NBT）到产物，排除耐久键 */
@@ -556,6 +646,11 @@ public class DisassembleMenu extends AbstractContainerMenu {
             }
             ItemStack assembled = ((Recipe) recipe).assemble(input, access);
             if (!assembled.isEmpty()) {
+                // ⚠️⚠️ 这里**必须**复制：Create 的 ProcessingRecipe#assemble 直接
+                //    `return getResultItem(registries)`，而它内部是 `getRollableResults().getFirst().getStack()`
+                //    —— 也就是**配方自己那个结果栈**。原样放进产物格之后，玩家一拿走/合并数量就把它 shrink 了，
+                //    于是 JEI 里这条配方的产物当场变空、只有重进世界才恢复（实测的"青金石→2 蓝染料"）。
+                assembled = assembled.copy();
                 copyStateFromMatchingInput(assembled);
                 return assembled;
             }
@@ -565,6 +660,27 @@ public class DisassembleMenu extends AbstractContainerMenu {
         return ItemStack.EMPTY;
     }
 
+    /**
+     * 完整材料清单 = getIngredients() + 额外 getter（中心/激活/催化物品）。
+     * <p>
+     * 合成方向（材料→产物）的校验与消耗都用它 —— 合成时中心那件也要被消耗掉；
+     * 拆解方向（产物→材料）仍然只用 getIngredients()，中心物品只显示不返还（避免凭空造物）。
+     * </p>
+     */
+    private static List<Ingredient> getFullIngredients(Recipe<?> recipe) {
+        List<Ingredient> all = new ArrayList<>(getIngredientsFromRecipe(recipe));
+        java.util.List<ItemStack> extras = EXTRA_DISPLAY.get(recipe);
+        if (extras == null) {
+            getIngredientsFromRecipe(recipe);          // 顺带把额外物品解析出来（按配方缓存）
+            extras = EXTRA_DISPLAY.get(recipe);
+        }
+        if (extras != null) {
+            for (ItemStack s : extras) {
+                if (!s.isEmpty()) all.add(Ingredient.of(s.getItem()));
+            }
+        }
+        return all;
+    }
     private static List<Ingredient> getIngredientsFromRecipe(Object recipeOrData) {
         if (!(recipeOrData instanceof Recipe<?> recipe)) return Collections.emptyList();
         if (UNREADABLE_RECIPE_TYPES.contains(recipe.getClass())) return Collections.emptyList();
@@ -576,6 +692,28 @@ public class DisassembleMenu extends AbstractContainerMenu {
             // 被 AllTheLeaks 等性能模组锁定后抛异常。记录该配方类型，之后同类配方直接跳过，避免重复抛异常。
             UNREADABLE_RECIPE_TYPES.add(recipe.getClass());
             ings = NonNullList.create();
+        }
+        // 补：有些自定义配方把"中心 / 激活 / 催化"物品放在自己的字段里，getIngredients() 不包含它
+        // —— 典型：诡厄巫法祭坛 RitualRecipe#getActivationItem（实测拆解台只列出外围材料、少了中间那件）。
+        // 反射试一小撮常见 getter：返回 Ingredient 直接加，返回非空 ItemStack 就包成 Ingredient。
+        // ⚠️ 绝不碰产物 getter（getResultItem / getResult），免得把产物当材料；出错一律静默跳过。
+        try {
+            java.util.List<ItemStack> extraFound = new java.util.ArrayList<>();
+            for (String extraName : new String[]{"getActivationItem", "getCatalyst", "getCenterItem",
+                    "getCoreItem", "getSacrificeItem", "getBaseItem"}) {
+                try {
+                    java.lang.reflect.Method em = recipe.getClass().getMethod(extraName);
+                    if (em.getParameterCount() != 0) continue;
+                    Object ev = em.invoke(recipe);
+                    if (ev instanceof Ingredient extraIng) {
+                        if (!extraIng.isEmpty() && extraIng.getItems().length > 0) { extraFound.add(extraIng.getItems()[0].copy()); EXTRA_DISPLAY.put(recipe, extraFound); }
+                    } else if (ev instanceof ItemStack extraStack) {
+                        if (!extraStack.isEmpty()) { extraFound.add(extraStack.copy()); EXTRA_DISPLAY.put(recipe, extraFound); }
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+        } catch (Throwable ignored) {
         }
         if (!ings.isEmpty()) return ings.stream().filter(i -> !i.isEmpty()).collect(Collectors.toList());
 
@@ -604,7 +742,8 @@ public class DisassembleMenu extends AbstractContainerMenu {
         }
 
         // 锻造配方材料强制提取
-        if (recipe instanceof SmithingTransformRecipe || recipe instanceof SmithingTrimRecipe) {
+        // 锻造配方强制提取（含模组自定义的 SmithingRecipe 实现）
+        if (recipe instanceof SmithingRecipe) {
             List<Ingredient> result = new ArrayList<>();
             String[] fieldNames = {"template", "base", "addition", "left", "right", "middle", "input1", "input2", "input3"};
             for (String n : fieldNames) {
@@ -757,7 +896,11 @@ public class DisassembleMenu extends AbstractContainerMenu {
         isUpdating = true;
 
         ItemStack input = container.getItem(0);
-        if (middleModified) returnOrDropMiddleItems();
+        // 九宫格里可能还留着上一轮拆出来的产物（leftConsumed：输入物品已为这些产物消耗过）
+        // 或玩家自己放进去的材料（middleModified）。换输入物品前先还给玩家，不能直接清空——
+        // 原先这里只判断 middleModified，而它全类从未被置为 true，等于永远走"直接清空"，
+        // 于是"拿走一部分产物后换掉输入物品"时，九宫格里剩下的产物会凭空消失。
+        if (leftConsumed || middleModified) returnOrDropMiddleItems();
         middleModified = leftConsumed = false;
         disassembleRecipeIdx = materialVariantIdx = 0;
         disassembleRecipes.clear();
@@ -792,9 +935,14 @@ public class DisassembleMenu extends AbstractContainerMenu {
 
         if (container.getItem(0).isEmpty()) {
             isUpdating = true;
+            // 无输入物品 = 合成模式：九宫格里是玩家自己放的材料，标记一下，
+            // 之后往输入槽放东西时会把这些材料还给玩家（见 onLeftSlotChanged）
+            middleModified = true;
+            // 记住当前这一页是哪条配方：材料改动后重算，只要它还能合成就不跳页
+            Object previous = currentCraftRecipe();
             craftRecipes.clear();
-            craftRecipeIdx = 0;
             updateCraftingResultByItems();
+            restoreCraftPage(previous);
             isUpdating = false;
             broadcastChanges();
             return;
@@ -933,26 +1081,43 @@ public class DisassembleMenu extends AbstractContainerMenu {
         disassembleRecipes = new ArrayList<>(candidates);
         disassembleRecipes = disassembleRecipes.stream()
                 .filter(r -> {
-                    List<Ingredient> ings = getIngredientsFromRecipe(r);
-                    if (ings.isEmpty()) return false;
-                    // 配方材料中含与输入同物品（"自身升级/修复"类）→ 可拆
-                    for (Ingredient ing : ings) {
-                        for (ItemStack s : ing.getItems()) {
-                            if (s.getItem() == input.getItem()) return true;
+                    // ⚠️⚠️ 整段必须兜 **Throwable**（不是 Exception）：大整合包里某个 mod 的配方一旦触发
+                    //      Error（NoSuchMethodError / AbstractMethodError / NoClassDefFoundError 这类），
+                    //      它不属于 Exception，会直接穿到服务端 tick 上把游戏带走（1.21.1 那边实测会闪退）。
+                    //      这里以前**一点兜底都没有**，属于漏网；现在最差也只是"这条配方不参与拆解"。
+                    try {
+                        List<Ingredient> ings = getIngredientsFromRecipe(r);
+                        if (ings.isEmpty()) return false;
+                        // 配方材料中含与输入同物品（"自身升级/修复"类）→ 可拆
+                        for (Ingredient ing : ings) {
+                            for (ItemStack s : ing.getItems()) {
+                                if (s.getItem() == input.getItem()) return true;
+                            }
                         }
-                    }
-                    // 合成配方（非熔炉/切石等加工配方）→ 允许拆解。
-                    // 拔刀剑等特殊材料配方（如：白鞘刀+煤块+金锭 → 基础刀）材料与成品
-                    // 物品不同，若不放行将永远识别不到可拆配方。
-                    if (r instanceof CraftingRecipe) return true;
-                    // tacz 枪匠台配方（自定义 Recipe<Inventory>，非 CraftingRecipe）同样放行
-                    if (r.getClass().getName().equals("com.tacz.guns.crafting.GunSmithTableRecipe")) return true;
-                    // 锻造配方：产物与输入同物品 → 放行，允许拆回材料（下界合金胸甲→钻石胸甲+材料等）。
-                    // 材料列表已不会包含产物（见 getIngredientsFromRecipe 的 Ingredient 类型过滤），
-                    // 此处放行是为了保证"输入=最终产物"的锻造配方仍能出现在拆解列表中。
-                    if (r instanceof SmithingRecipe) {
-                        ItemStack out = getRecipeOutput(r, level.registryAccess());
-                        if (!out.isEmpty() && out.getItem() == input.getItem()) return true;
+                        // 合成配方（非熔炉/切石等加工配方）→ 允许拆解。
+                        // 拔刀剑等特殊材料配方（如：白鞘刀+煤块+金锭 → 基础刀）材料与成品
+                        // 物品不同，若不放行将永远识别不到可拆配方。
+                        if (r instanceof CraftingRecipe) return true;
+                        // tacz 枪匠台配方（自定义 Recipe<Inventory>，非 CraftingRecipe）同样放行
+                        if (r.getClass().getName().equals("com.tacz.guns.crafting.GunSmithTableRecipe")) return true;
+                        // ⚠️ 自定义配方类型放行：无尽贪婪 avaritia:extreme_shaped/shapeless、诡厄巫法 goety:ritual/brazier
+                        //   这类配方不是 CraftingRecipe，但能枚举出材料（祭坛/仪式类一并放行）。
+                        //   只排除熔炉/切石这类"纯加工"配方 —— 那类拆了没意义。
+                        // 纯加工配方（熔炉/烟熏/切石等）也一并放行。
+                        // 只有锻造保留它自己的专门规则（下面那段），避免绕过产物判定。
+                        if (!(r instanceof net.minecraft.world.item.crafting.SmithingRecipe)) {
+                            return true;
+                        }
+                        // 锻造配方：产物与输入同物品 → 放行，允许拆回材料（下界合金胸甲→钻石胸甲+材料等）。
+                        // 材料列表已不会包含产物（见 getIngredientsFromRecipe 的 Ingredient 类型过滤），
+                        // 此处放行是为了保证"输入=最终产物"的锻造配方仍能出现在拆解列表中。
+                        if (r instanceof SmithingRecipe) {
+                            ItemStack out = getRecipeOutput(r, level.registryAccess());
+                            if (!out.isEmpty() && out.getItem() == input.getItem()) return true;
+                        }
+                    } catch (Throwable t) {
+                        // 单条配方出问题只跳过它自己（配方太多，别刷屏：这里不打日志，索引阶段已经记过一遍）
+                        return false;
                     }
                     return false;
                 })
@@ -1096,11 +1261,25 @@ public class DisassembleMenu extends AbstractContainerMenu {
     }
 
     private void updateMiddleGridFromProductList() {
+        // 显示 = 材料 + 额外物品（中心/激活/催化）。⚠️ 规则：这些额外物品
+        // 在拆解方向上**也要返还**（拆一件成品应该连中心物品一起还回来），所以它们和材料一样能拿。
+        java.util.List<ItemStack> showList = new ArrayList<>(currentProductList);
+        List<ItemStack> extrasForThis = disassembleRecipes.isEmpty() ? null
+                : EXTRA_DISPLAY.get(disassembleRecipes.get(Math.max(0, Math.min(disassembleRecipeIdx, disassembleRecipes.size() - 1))));
+        for (ItemStack extraShow : (extrasForThis == null ? java.util.List.<ItemStack>of() : extrasForThis)) {
+            if (showList.size() >= 9) break;
+            showList.add(extraShow.copy());
+        }
         for (int i = 1; i <= 9; i++) {
-            container.setItem(i, i <= currentProductList.size() ? currentProductList.get(i - 1).copy() : ItemStack.EMPTY);
+            container.setItem(i, i <= showList.size() ? showList.get(i - 1).copy() : ItemStack.EMPTY);
         }
         container.setItem(10, container.getItem(0).copy());
         updateMiddleCache();
+    }
+
+    /** 九宫格第 index 格（0 基）现在是不是"中心/激活物品"（= 材料之后的那些格）：全部拆解要照发一次 */
+    private int extraMaterialStart() {
+        return Math.min(9, currentProductList.size());
     }
 
     private void updateDisassemblePreview() {
@@ -1149,7 +1328,11 @@ public class DisassembleMenu extends AbstractContainerMenu {
             for (Recipe<?> r : craftCandidates) {
                 if (r instanceof TippedArrowRecipe) continue;
 
-                List<Ingredient> ings = getIngredientsFromRecipe(r).stream()
+                // ⚠️⚠️ 匹配（决定"产物格显不显示"）必须用**完整材料清单**：中心/激活物品也算。
+                //    以前这里用 getIngredientsFromRecipe（不含中心物品），于是"缺中心物品也能出产物预览"，
+                //    而消耗那步用的是完整清单 → 校验失败 → 玩家把预览拿走就等于凭空获得产物（实测"缺黑暗魔杖
+                //    也能合成风之魔杖、还能无限拿"）。预览与消耗必须同一套判据，不然必出刷物品。
+                List<Ingredient> ings = getFullIngredients(r).stream()
                         .filter(i -> !i.isEmpty())
                         .collect(Collectors.toList());
                 if (ings.isEmpty()) continue;
@@ -1160,6 +1343,15 @@ public class DisassembleMenu extends AbstractContainerMenu {
                 if (ings.isEmpty()) continue;
 
                 if (matchesIngredients(placed, ings)) craftRecipes.add(r);
+            }
+        }
+
+        // 锻造配方兜底：材料枚举不出来的实现进不了上面的索引，
+        // 这里按 模板/基础/材料 角色直接判定九宫格，保证锻造台配方在合成页也能用。
+        for (Recipe<?> r : SMITHING_RECIPES) {
+            if (craftRecipes.contains(r)) continue;
+            if (r instanceof SmithingRecipe smithing && pickSmithingRoleItems(smithing) != null) {
+                craftRecipes.add(r);
             }
         }
 
@@ -1229,6 +1421,52 @@ public class DisassembleMenu extends AbstractContainerMenu {
         }
     }
 
+    /**
+     * 当前这一页对应的配方（越界时取最后一页），用于重算前记下"玩家正停在哪条配方上"。
+     *
+     * @return 当前配方；列表为空时返回 {@code null}
+     */
+    private Object currentCraftRecipe() {
+        if (craftRecipes.isEmpty()) return null;
+        return craftRecipes.get(Math.min(craftRecipeIdx, craftRecipes.size() - 1));
+    }
+
+    /**
+     * 重算配方列表后恢复页码。
+     * <p>
+     * 取走产物后原先直接写 {@code craftRecipeIdx = 0}，于是"第三页取走产物、材料还有剩余"
+     * 会跳回第一页。现在改为：原配方只要仍在候选列表里就定位回它；确实不在时保留
+     * {@link #updateCraftingResultByItems()} 夹取后的页码（越界夹到最后一页），不再跳回第一页。
+     * </p>
+     *
+     * @param previous 重算前那一页的配方，可为 {@code null}
+     */
+    private void restoreCraftPage(Object previous) {
+        if (previous == null || craftRecipes.isEmpty()) return;
+        int idx = indexOfCraftRecipe(previous);
+        if (idx < 0 || idx == craftRecipeIdx) return;
+        craftRecipeIdx = idx;
+        displayCurrentCraftResult();
+        craftIndexSlot.set(craftRecipeIdx + 1);
+        craftTotalSlot.set(craftRecipes.size());
+    }
+
+    /**
+     * 在候选列表里找同一条配方：配方对象来自注册表，可直接按引用比较；
+     * 药水类产物是每次重算新建的 {@link ItemStack}，按物品与 NBT 比较。
+     *
+     * @param target 目标配方或产物
+     * @return 下标，找不到返回 -1
+     */
+    private int indexOfCraftRecipe(Object target) {
+        for (int i = 0; i < craftRecipes.size(); i++) {
+            Object o = craftRecipes.get(i);
+            if (o == target) return i;
+            if (o instanceof ItemStack a && target instanceof ItemStack b && ItemStack.matches(a, b)) return i;
+        }
+        return -1;
+    }
+
     private boolean matchesIngredients(List<ItemStack> placed, List<Ingredient> ings) {
         List<ItemStack> temp = placed.stream().map(ItemStack::copy).collect(Collectors.toCollection(ArrayList::new));
         for (Ingredient ing : ings) {
@@ -1282,6 +1520,7 @@ public class DisassembleMenu extends AbstractContainerMenu {
 
     private void performDisassemble() {
         isUpdating = true;
+        lastSettleOk = false;
         try {
             ItemStack left = container.getItem(0);
             if (left.isEmpty() || currentProductList.isEmpty()) return;
@@ -1290,6 +1529,7 @@ public class DisassembleMenu extends AbstractContainerMenu {
             if (left.isEmpty()) container.setItem(0, ItemStack.EMPTY);
 
             for (int i = 1; i <= 9; i++) {
+                // 中心/激活物品（配方末尾那几格）也一起返还：规则见 EXTRA_DISPLAY 字段注释
                 ItemStack s = container.getItem(i);
                 if (!s.isEmpty()) {
                     if (!player.getInventory().add(s.copy())) {
@@ -1298,6 +1538,9 @@ public class DisassembleMenu extends AbstractContainerMenu {
                     container.setItem(i, ItemStack.EMPTY);
                 }
             }
+
+            // 到这里就是真的拆掉了一个：输入扣了、材料给了
+            lastSettleOk = true;
 
             container.setItem(10, ItemStack.EMPTY);
             currentProductList.clear();
@@ -1323,9 +1566,11 @@ public class DisassembleMenu extends AbstractContainerMenu {
     }
 
     private void performCraft() {
+        lastSettleOk = false;
         if (craftRecipes.isEmpty() || craftRecipeIdx >= craftRecipes.size()) return;
 
         Object obj = craftRecipes.get(craftRecipeIdx);
+        // 这一页可能还有剩余材料可继续合成：重算后按 obj 找回同一页（见 restoreCraftPage）
 
         if (obj instanceof ItemStack resultItem) {
             if (resultItem.isEmpty()) return;
@@ -1396,9 +1641,9 @@ public class DisassembleMenu extends AbstractContainerMenu {
                 }
             }
 
-            craftRecipes.clear();
-            craftRecipeIdx = 0;
             updateCraftingResultByItems();
+            restoreCraftPage(obj);
+            lastSettleOk = true;
             broadcastChanges();
             return;
         }
@@ -1411,24 +1656,43 @@ public class DisassembleMenu extends AbstractContainerMenu {
         ItemStack result = assembleRecipeOutput(recipe, player.level().registryAccess());
         if (result.isEmpty()) return;
 
-        List<Ingredient> ings = getIngredientsFromRecipe(recipe).stream()
+        List<Ingredient> ings = getFullIngredients(recipe).stream()
                 .filter(i -> !i.isEmpty())
                 .collect(Collectors.toList());
 
         // 合成确认时不执行"剔除输出物"处理：若剔除自身，玩家可无成本合成，造成物品复制。
         // "自身 + 其他 → 输出"的配方应消耗全部材料（含自身）。
 
-        if (!tryConsumeIngredients(ings)) {
-            // 材料在预览后已被改动（极少见）：将产物放回槽 10，以免玩家无消耗获得产物。
-            container.setItem(10, result.copy());
-            container.setChanged();
+        // 锻造配方：材料枚举不出来时按角色消耗，避免"不消耗材料就凭空获得产物"
+        if (ings.isEmpty() && recipe instanceof SmithingRecipe smithing) {
+            if (!consumeSmithingRoleItems(smithing)) {
+                failCraft();
+                return;
+            }
+        } else if (!hasAllIngredients(ings) || !tryConsumeIngredients(ings)) {
+            failCraft();
             return;
         }
 
-        craftRecipes.clear();
-        craftRecipeIdx = 0;
         updateCraftingResultByItems();
+        restoreCraftPage(obj);
+        lastSettleOk = true;
         broadcastChanges();
+    }
+
+    /**
+     * 合成结算失败时的收尾。
+     * <p>
+     * ⚠️⚠️ <b>绝不能把产物放回槽 10</b>：原版点击路径是"<b>先</b>把产物从产物格取走、<b>再</b>调 {@code onTake}"，
+     * 所以只要结算失败时产物还在格子里，下一次点击就又能把它拿走 —— 玩家实测的"缺中心物品也能合成、
+     * 而且无限拿不消耗"就是这么来的。正确做法是：<b>清空产物格 + 重算</b>；
+     * 重算时若材料其实够（含中心物品），预览会自己回来，不够就一直空着。
+     * </p>
+     */
+    private void failCraft() {
+        container.setItem(10, ItemStack.EMPTY);
+        container.setChanged();
+        updateCraftingResultByItems();
     }
 
     // ---- 物品消耗辅助 ----
@@ -1512,6 +1776,57 @@ public class DisassembleMenu extends AbstractContainerMenu {
         return false;
     }
 
+    /**
+     * 按 模板/基础/材料 角色各消耗 1 个（用于材料枚举不出来的锻造配方）。
+     *
+     * @return 三件都消耗成功返回 {@code true}；凑不齐或某件已不在九宫格里返回 {@code false}
+     */
+    private boolean consumeSmithingRoleItems(SmithingRecipe smithing) {
+        ItemStack[] picked = pickSmithingRoleItems(smithing);
+        if (picked == null) return false;
+        for (ItemStack need : picked) {
+            boolean consumed = false;
+            for (int i = 1; i <= 9; i++) {
+                ItemStack s = container.getItem(i);
+                if (s.isEmpty() || !ItemStack.isSameItemSameTags(s, need)) continue;
+                s.shrink(1);
+                if (s.isEmpty()) container.setItem(i, ItemStack.EMPTY);
+                else container.setChanged();
+                consumed = true;
+                break;
+            }
+            if (!consumed) return false;
+        }
+        return true;
+    }
+
+    /**
+     * 先验证「九宫格里每种材料都够」，够了才允许真扣。
+     * <p>
+     * ⚠️ 这是为了避免实测到的两个严重问题：扣材料是"边找边扣"，扣到一半失败就出现
+     * 「材料没了、产物也拿不到」（干消耗）或「没扣成本却拿到产物」（无限刷）——
+     * 合成必须是**全有或全无**。这里只做校验、不改动九宫格。
+     * </p>
+     */
+    private boolean hasAllIngredients(List<Ingredient> ings) {
+        List<ItemStack> grid = new ArrayList<>();
+        for (int i = 1; i <= 9; i++) {
+            grid.add(container.getItem(i).copy());
+        }
+        for (Ingredient ing : ings) {
+            if (ing == null || ing.isEmpty()) continue;
+            boolean found = false;
+            for (int i = 0; i < grid.size(); i++) {
+                ItemStack s = grid.get(i);
+                if (s.isEmpty() || !ing.test(s)) continue;
+                s.shrink(1);
+                found = true;
+                break;
+            }
+            if (!found) return false;
+        }
+        return true;
+    }
     private boolean tryConsumeIngredients(List<Ingredient> ings) {
         List<ItemStack> temp = new ArrayList<>();
         for (int i = 1; i <= 9; i++) {
@@ -1580,8 +1895,40 @@ public class DisassembleMenu extends AbstractContainerMenu {
         Arrays.fill(previousMiddleStacks, ItemStack.EMPTY);
     }
 
+    /** 这一轮取产物到底结算成功没有（见 {@link #lastSettleOk} 的说明） */
+    public boolean lastSettleSucceeded() {
+        return lastSettleOk;
+    }
+
+    /**
+     * 供"次元袋里的拆解页"调用：把产物从槽 10 拿出来并让原版结算（照原版
+     * {@code AbstractContainerMenu#doClick} 的点击语义——先取出产物、再调 {@code onTake}）。
+     * <p>
+     * 为什么必须"先拿再结算"而不是"先结算、再看槽 10 空不空"：合成成功但九宫格还有剩余材料时，
+     * 原版 {@code updateCraftingResultByItems()} 会把产物<b>重新画回槽 10</b> 当下一条的预览，
+     * 于是"槽 10 空了"这个判据永远不成立，产物就拿不到了（实测）。
+     * 结算成没成看 {@link #lastSettleSucceeded()}；没成的话调用方要把产物放回（{@link #setOutputSlot}）。
+     * </p>
+     */
+    public ItemStack extractOutputSlot(Player p) {
+        Slot slot = this.getSlot(10);
+        ItemStack before = slot.getItem();
+        if (before.isEmpty() || !slot.mayPickup(p)) return ItemStack.EMPTY;
+        ItemStack taken = slot.remove(before.getCount());
+        slot.setChanged();
+        if (taken.isEmpty()) return ItemStack.EMPTY;
+        slot.onTake(p, taken);
+        return taken;
+    }
+
+    /** 把产物放回槽 10（结算失败时用；只是预览/展示，不代表玩家已付过钱） */
+    public void setOutputSlot(ItemStack stack) {
+        container.setItem(10, stack.isEmpty() ? ItemStack.EMPTY : stack.copy());
+    }
+
     private void returnOrDropMiddleItems() {
         for (int i = 1; i <= 9; i++) {
+            // 中心/激活物品也一起返还（规则见 EXTRA_DISPLAY 的注释）
             ItemStack s = container.getItem(i);
             if (!s.isEmpty()) {
                 if (!player.getInventory().add(s.copy())) {
@@ -1695,12 +2042,16 @@ public class DisassembleMenu extends AbstractContainerMenu {
             // ---- 阶段一：产出→配方（拆解） ----
             RECIPES_BY_OUTPUT.clear();
             RECIPES_BY_OUTPUT_DETAIL.clear();
+            SMITHING_RECIPES.clear();
             recipeIndexProcessed = 0;
             recipeIndexTotal = recipes.size();
             long batchEnd = System.nanoTime() + INDEX_WORK_NS;
             for (Recipe<?> r : recipes) {
                 if (gen != indexGeneration) return; // 构建期间被重置，放弃旧快照
                 try {
+                    if (r instanceof net.minecraft.world.item.crafting.SmithingRecipe) {
+                        SMITHING_RECIPES.add(r);
+                    }
                     ItemStack out = getRecipeOutput(r, level.registryAccess());
                     if (!out.isEmpty()) {
                         RECIPES_BY_OUTPUT.computeIfAbsent(out.getItem(),
@@ -1827,6 +2178,56 @@ public class DisassembleMenu extends AbstractContainerMenu {
         }
     }
 
+    /**
+     * 把拆解输入槽里的物品退还给玩家，并切回合成模式。
+     * <p>
+     * 用于 JEI 的"+"号填入材料之前：输入槽有东西时菜单处于拆解模式，材料填进九宫格也不会
+     * 出合成预览，所以先把该槽清空。细则：
+     * <ul>
+     *   <li>还没被消耗的输入物品原样退还；</li>
+     *   <li>九宫格里已经"付款"（leftConsumed）的拆解产物一并退还；</li>
+     *   <li>还没付款的自动填入预览产物直接丢弃——否则 JEI 会把它们当材料退回背包，等于凭空获得物品。</li>
+     * </ul>
+     * </p>
+     */
+    public void returnInputToPlayer() {
+        if (player.level().isClientSide) return;
+        ItemStack input = container.getItem(0);
+        if (input.isEmpty()) return;
+
+        if (leftConsumed) {
+            returnOrDropMiddleItems();
+        } else {
+            for (int i = 1; i <= 9; i++) container.setItem(i, ItemStack.EMPTY);
+            clearMiddleCache();
+        }
+
+        ItemStack give = input.copy();
+        container.setItem(0, ItemStack.EMPTY);
+        if (!player.getInventory().add(give)) {
+            player.drop(give, false);
+        }
+
+        // 清掉拆解侧状态，按当前九宫格重算合成预览（此时是合成模式）
+        disassembleRecipeIdx = materialVariantIdx = 0;
+        disassembleRecipes.clear();
+        variantPairs.clear();
+        currentPairIndex = 0;
+        currentProductList.clear();
+        currentPotionSteps.clear();
+        currentPotionStepIndex = 0;
+        leftConsumed = false;
+        middleModified = false;
+        setButtonMode(false);
+        disassembleIndexSlot.set(0);
+        disassembleTotalSlot.set(0);
+        craftRecipes.clear();
+        craftRecipeIdx = 0;
+        container.setItem(10, ItemStack.EMPTY);
+        updateCraftingResultByItems();
+        broadcastChanges();
+    }
+
     /** 客户端读取：索引状态（0=拆解构建中, 1=拆解就绪/合构建中, 2+=全部就绪），用于显示提示。 */
     public int getRecipeIndexState() {
         return recipeReadyDataSlot.get();
@@ -1848,7 +2249,14 @@ public class DisassembleMenu extends AbstractContainerMenu {
         if (isUpdating) return;
         boolean hasLeft = !container.getItem(0).isEmpty();
         if (hasLeft) {
-            onLeftSlotChanged();
+            // ⚠️ 同样兜 Throwable：索引构建完会重算一次，这里出错也不能把游戏带走（理由见输入槽 setChanged 那段）
+            try {
+                onLeftSlotChanged();
+            } catch (Throwable t) {
+                com.mojang.logging.LogUtils.getLogger().error(
+                        "[次元袋·拆解台] 索引就绪后重算出错（已兜住，不影响游戏）：物品={}",
+                        container.getItem(0), t);
+            }
             return;
         }
         boolean hasGrid = false;
@@ -1890,6 +2298,7 @@ public class DisassembleMenu extends AbstractContainerMenu {
         if (!left.isEmpty()) {
             if (leftConsumed) {
                 for (int i = 1; i <= 9; i++) {
+                    // 中心/激活物品也一起返还（规则见 EXTRA_DISPLAY 的注释）
                     ItemStack s = container.getItem(i);
                     if (!s.isEmpty()) {
                         if (!p.getInventory().add(s.copy())) {
@@ -1955,6 +2364,9 @@ public class DisassembleMenu extends AbstractContainerMenu {
     @Override
     public boolean clickMenuButton(Player p, int id) {
         switch (id) {
+            case 6: // JEI 用"+"填材料前：把拆解输入槽退还给玩家，切到合成模式
+                returnInputToPlayer();
+                return true;
             case 0: // 拆解上一页
                 if (!container.getItem(0).isEmpty()) {
                     if (currentPotionSteps.size() > 1) {
@@ -2039,6 +2451,14 @@ public class DisassembleMenu extends AbstractContainerMenu {
 
         List<ItemStack> prods = currentProductList.stream().map(ItemStack::copy).collect(Collectors.toList());
 
+        // ⚠️ 中心/激活物品（材料之后的那几格，EXTRAS）**只发一次**，不能跟着每个输入物品重复发
+        //（全部拆解也要给中间的黑暗魔杖，但同时不能把一个魔法杖乘上整叠数量）。
+        List<ItemStack> extras = new ArrayList<>();
+        for (int i = extraMaterialStart() + 1; i <= 9; i++) {
+            ItemStack s = container.getItem(i);
+            if (!s.isEmpty()) extras.add(s.copy());
+        }
+
         while (!left.isEmpty()) {
             left.shrink(1);
             if (left.isEmpty()) container.setItem(0, ItemStack.EMPTY);
@@ -2049,6 +2469,12 @@ public class DisassembleMenu extends AbstractContainerMenu {
                 }
             }
             if (container.getItem(0).isEmpty()) break;
+        }
+
+        for (ItemStack extra : extras) {
+            if (!player.getInventory().add(extra.copy())) {
+                player.drop(extra.copy(), false);
+            }
         }
 
         for (int i = 1; i <= 9; i++) container.setItem(i, ItemStack.EMPTY);

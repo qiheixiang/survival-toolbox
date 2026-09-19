@@ -15,6 +15,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * Inventory Mixin
  * <p>
+ * ⚠️ 这里的 dropAll 只在**没开 keepInventory** 时被调用（原版 {@code Player#dropEquipment} 里有判断），
+ * 所以开了"死亡不掉落"时本 mixin 根本不执行 —— 那种情况下袋子由原版复制背包带过去，见 SurvivalToolbox#onPlayerClone。
+ * <p>
+ * ⚠️ dropAll 只在**没开 keepInventory** 时才会被调用（原版 Player#dropEquipment 里有判断），
+ * 所以开了"死亡不掉落"时本 mixin 根本不执行 —— 那种情况下袋子由原版复制背包带过去，
+ * 见 SurvivalToolbox#onPlayerClone（那里按"新玩家已有袋子就不给"兜重复）。
+ * <p>
  * 死亡掉落源头拦截：dropAll 里跳过次元袋（不生成掉落物），
  * 全部掉落结束后把袋子放回背包——袋子从始至终不离开背包，
  * 不依赖任何死亡掉落事件，整合包的其他死亡处理也不会把它带走。

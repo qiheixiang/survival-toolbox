@@ -1,7 +1,5 @@
 package com.zzq.survival_toolbox;
 
-import com.zzq.survival_toolbox.block.entity.GuardianLanternBlockEntity;
-import com.zzq.survival_toolbox.client.gui.MainConfigScreen;
 import com.zzq.survival_toolbox.command.AdaptCommand;
 import com.zzq.survival_toolbox.command.BloodthirstyCommand;
 import com.zzq.survival_toolbox.entity.AnvilOrbProjectile;
@@ -16,7 +14,6 @@ import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.DispenserBlock;
-import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -25,7 +22,6 @@ import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
-import net.minecraftforge.client.ConfigScreenHandler;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
@@ -37,12 +33,20 @@ import java.util.Optional;
  * <p>
  * 负责模组的初始化、注册表注册、网络通道建立、事件监听注册和命令注册。
  * </p>
+ * <p>
+ * 注意：本类会被专用服务器加载，因此这里<b>不能</b>出现任何客户端类型的引用
+ * （{@code net.minecraft.client.*}、Forge 客户端类、配置界面等），
+ * 否则服务器启动时会因「Attempted to load class ... for invalid dist DEDICATED_SERVER」直接崩溃。
+ * 客户端相关内容统一放在 {@code com.zzq.survival_toolbox.client} 包，并经由
+ * {@link com.zzq.survival_toolbox.client.ClientSetup#init()} 在客户端分支里调用。
+ * </p>
  */
 @Mod("zzq_survival_toolbox")
 public class SurvivalToolbox {
 
     public static final String MODID = "zzq_survival_toolbox";
-    public static final String NETWORK_VERSION = "1.2";
+    /** 加了 JEI 转移包（PocketJeiTransferPacket）与同步包的托盘图标栈，和旧版本客户端/服务端不互通，必须一起升 */
+    public static final String NETWORK_VERSION = "1.6";
 
     /**
      * 网络通道：所有客户端↔服务端通信均通过此通道传输
@@ -84,13 +88,11 @@ public class SurvivalToolbox {
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new GuardianLanternEventHandler());
 
-        // ---- 配置界面（Forge 主菜单入口） ----
-        ModLoadingContext.get().registerExtensionPoint(
-                ConfigScreenHandler.ConfigScreenFactory.class,
-                () -> new ConfigScreenHandler.ConfigScreenFactory(
-                        (client, parent) -> new MainConfigScreen(parent)
-                )
-        );
+        // ---- 客户端专属初始化（配置界面入口、客户端登出清理等） ----
+        // 必须放在 Dist 分支里调用，主类本身不得出现客户端类型，否则专用服务器启动即崩。
+        if (net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient()) {
+            com.zzq.survival_toolbox.client.ClientSetup.init();
+        }
 
         // ---- 网络包注册 ----
         int id = 0;
@@ -150,10 +152,72 @@ public class SurvivalToolbox {
                 PocketDimensionPageActionPacket::decode,
                 PocketDimensionPageActionPacket::handle);
 
+        // 托盘面板开关 / 送出-纳入方向切换（服务端权威：方向存在袋子 NBT 里，关界面后右键容器还要用）
+        CHANNEL.registerMessage(id++, PocketTrayActionPacket.class,
+                PocketTrayActionPacket::encode,
+                PocketTrayActionPacket::decode,
+                PocketTrayActionPacket::handle);
+
+        // 本地存储一键并入共享空间（合并式：同种累加、不覆盖共享已有内容）
+        CHANNEL.registerMessage(id++, PocketMergeToSharedPacket.class,
+                PocketMergeToSharedPacket::encode,
+                PocketMergeToSharedPacket::decode,
+                PocketMergeToSharedPacket::handle);
+
+        // 整理（当前页 / 全部页）
+        CHANNEL.registerMessage(id++, PocketSortPacket.class,
+                PocketSortPacket::encode,
+                PocketSortPacket::decode,
+                PocketSortPacket::handle);
+        CHANNEL.registerMessage(id++, PocketGrabPacket.class,
+                PocketGrabPacket::encode,
+                PocketGrabPacket::decode,
+                PocketGrabPacket::handle);
+
+        // 铁砧页的改名框：文字传到服务端，由原版 AnvilMenu 引擎算产物
+        CHANNEL.registerMessage(id++, PocketPageTextPacket.class,
+                PocketPageTextPacket::encode,
+                PocketPageTextPacket::decode,
+                PocketPageTextPacket::handle);
+
         CHANNEL.registerMessage(id++, PocketQuickDepositPacket.class,
                 PocketQuickDepositPacket::encode,
                 PocketQuickDepositPacket::decode,
                 PocketQuickDepositPacket::handle);
+
+        // 透视眼镜方块开关（每副眼镜的列表独立，写在该物品自己的 NBT 里）
+        CHANNEL.registerMessage(id++, XrayToggleBlockPacket.class,
+                XrayToggleBlockPacket::toBytes,
+                XrayToggleBlockPacket::new,
+                XrayToggleBlockPacket::handle);
+
+        // 次元袋存储模式切换（共享 ↔ 本地）
+        CHANNEL.registerMessage(id++, SyncTradeMachinePacket.class,
+                SyncTradeMachinePacket::encode, SyncTradeMachinePacket::decode, SyncTradeMachinePacket::handle);
+        CHANNEL.registerMessage(id++, TradeMachineSearchPacket.class,
+                TradeMachineSearchPacket::encode, TradeMachineSearchPacket::decode, TradeMachineSearchPacket::handle);
+        // 交易机界面打开标记（服务端→客户端）：客户端靠它区分"这台是交易机"还是村民，好叠画搜索框
+        CHANNEL.registerMessage(id++, TradeMachineOpenPacket.class,
+                TradeMachineOpenPacket::encode, TradeMachineOpenPacket::decode, TradeMachineOpenPacket::handle);
+        CHANNEL.registerMessage(id++, TradeMachineActionPacket.class,
+                TradeMachineActionPacket::encode, TradeMachineActionPacket::decode, TradeMachineActionPacket::handle);
+        CHANNEL.registerMessage(id++, PocketModeTogglePacket.class,
+                PocketModeTogglePacket::toBytes,
+                PocketModeTogglePacket::new,
+                PocketModeTogglePacket::handle);
+        // JEI 的"+"号转移：客户端把"配方每格的候选物品表"发上来，服务端取料摆格（见 PocketJeiTransferPacket）
+        CHANNEL.registerMessage(id++, PocketJeiTransferPacket.class,
+                PocketJeiTransferPacket::encode, PocketJeiTransferPacket::decode, PocketJeiTransferPacket::handle);
+
+        // JEI"+"号的可转移性查询（客户端 → 服务端）与回复（服务端 → 客户端）：
+        // 共享模式袋子的内容在服务器存档里、客户端看不见，只能由服务端回答"这套材料凑不凑得齐"
+        // （对应的历史问题："1.20.1 就算物品不足 + 号也能点"）。见 PocketJeiQueryPacket 的说明。
+        CHANNEL.registerMessage(id++, PocketJeiQueryPacket.class,
+                PocketJeiQueryPacket::encode, PocketJeiQueryPacket::decode, PocketJeiQueryPacket::handle);
+        CHANNEL.registerMessage(id++, PocketJeiQueryReplyPacket.class,
+                PocketJeiQueryReplyPacket::encode, PocketJeiQueryReplyPacket::decode,
+                PocketJeiQueryReplyPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
 
         // ---- 发射器行为：铁砧球与捕获实体放入发射器后，红石触发等同右键投掷 ----
         // 注册需在 FMLCommonSetupEvent（注册表填充完成后）执行；
@@ -239,12 +303,24 @@ public class SurvivalToolbox {
 
     /**
      * 重生时把次元袋从旧玩家背包转移给新玩家。
-     * 死亡掉落关闭 keepInventory 时重生不会复制背包，
-     * 袋子（死亡时被 InventoryMixin 留在旧背包）会随旧实体销毁而消失，
-     * 这里在 Clone 事件中手动转移，确保重生后袋子一定在背包里。
+     * <p>
+     * 只在<b>没开"死亡不掉落"（keepInventory）</b>时才真的需要搬：死亡掉落走
+     * {@code Inventory#dropAll}（被 {@link com.zzq.survival_toolbox.mixin.InventoryMixin} 拦住，袋子留在旧背包），
+     * 而没开 keepInventory 时原版不会复制背包，袋子会随旧实体一起消失，所以这里手动转移。
+     * </p>
+     * <p>
+     * ⚠️ <b>开了 keepInventory 时原版已经复制过一份了</b>：{@code ServerPlayer#restoreFrom} 里有一段按
+     * {@code RULE_KEEPINVENTORY} 判断的分支，会把整份背包（含袋子）复制给新玩家，而且发生在<b>本事件之前</b>
+     * （1.21.1：偏移 188 读规则 → 205 复制，Clone 事件在 406；1.20.1：127 → 154，Clone 在 340，字节码确认过）。
+     * 老写法以为"新玩家已有袋子时 add 会失败"，其实袋子是 stacksTo(1)、不会合并，add 会直接另找空格塞进去
+     * —— 结果是<b>两个袋子</b>。所以这里改成"新玩家身上已经有袋子就不给"，而不是简单看游戏规则：
+     * 这样 keepInventory 开/关、以及别的 mod 插手背包复制都不会重复；万一哪天原版不复制了，下面的 add 仍会补上。
+     * </p>
      */
     @SubscribeEvent
-    public void onPlayerClone(net.minecraftforge.event.entity.player.PlayerEvent.Clone event) {
+    public void onPlayerClone(
+net.minecraftforge.event.entity.player.PlayerEvent.Clone
+ event) {
         if (!event.isWasDeath()) return;
         net.minecraft.world.entity.player.Player original = event.getOriginal();
         net.minecraft.world.entity.player.Player player = event.getEntity();
@@ -253,11 +329,30 @@ public class SurvivalToolbox {
             net.minecraft.world.item.ItemStack stack = original.getInventory().items.get(i);
             if (!stack.isEmpty() && stack.is(ModItems.POCKET_DIMENSION.get())) {
                 original.getInventory().items.set(i, net.minecraft.world.item.ItemStack.EMPTY);
-                if (!player.getInventory().add(stack)) {
-                    // 新玩家已有袋子（keepInventory 复制）或背包满：丢弃旧的，避免重复
+                // keepInventory（或别的 mod）已经把袋子复制给新玩家了 → 跳过：
+                // ⚠️ 复制过来的是**同一个 ItemStack 实例**，再 add 一次会把这个实例搬到第一个空位、
+                // 顺手把它原来那格清零（add 内部 setCount(0)）→ 表现出来就是"袋子顺延到后面去了"。
+                if (hasPocketBag(player)) continue;
+                // 放回**原来那一格**（同一个位置，看着不突兀）；那格真被占了才退回"找第一个空位"，
+                // 实在没地方才掉在死亡地点（旧实体还在场上），至少不消失。
+                net.minecraft.world.entity.player.Inventory newInv = player.getInventory();
+                if (i < newInv.items.size() && newInv.items.get(i).isEmpty()) {
+                    newInv.items.set(i, stack);
+                } else if (!newInv.add(stack)) {
+                    original.drop(stack, false, false);
                 }
             }
         }
+    }
+
+    /** 新玩家身上（含护甲/副手槽）是否已经有次元袋 */
+    private static boolean hasPocketBag(net.minecraft.world.entity.player.Player player) {
+        net.minecraft.world.entity.player.Inventory inv = player.getInventory();
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            net.minecraft.world.item.ItemStack stack = inv.getItem(i);
+            if (!stack.isEmpty() && stack.is(ModItems.POCKET_DIMENSION.get())) return true;
+        }
+        return false;
     }
 
     /**
@@ -270,18 +365,5 @@ public class SurvivalToolbox {
         if (server.overworld() != null) {
             com.zzq.survival_toolbox.screen.DisassembleMenu.ensureRecipeIndex(server.overworld());
         }
-    }
-
-    /**
-     * 客户端登出时清理客户端缓存实例
-     * <p>
-     * 防止残留引用导致内存泄漏。
-     * </p>
-     *
-     * @param event 客户端登出事件
-     */
-    @SubscribeEvent
-    public void onClientLogout(ClientPlayerNetworkEvent.LoggingOut event) {
-        GuardianLanternBlockEntity.getClientInstances().clear();
     }
 }

@@ -129,7 +129,7 @@ public class CapturedEntityItem extends Item implements ProjectileItem {
             entriesTag.add(entryTag);
         }
         dropListTag.put(TAG_DROP_ENTRIES, entriesTag);
-        ItemNbt.getOrCreateTag(stack).put(TAG_DROP_LIST, dropListTag);
+        ItemNbt.edit(stack, t -> t.put(TAG_DROP_LIST, dropListTag));
     }
 
     public static List<DropEntry> getDropList(ItemStack stack,

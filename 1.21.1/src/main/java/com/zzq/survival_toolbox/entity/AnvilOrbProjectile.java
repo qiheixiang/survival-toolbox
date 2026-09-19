@@ -280,7 +280,7 @@ public class AnvilOrbProjectile extends ThrowableItemProjectile implements ItemS
                             lootDrops
                     );
                     if (dropListNBT != null && !dropListNBT.isEmpty()) {
-                        ItemNbt.getOrCreateTag(capturedStack).put(CapturedEntityItem.TAG_DROP_LIST, dropListNBT);
+                        ItemNbt.edit(capturedStack, t -> t.put(CapturedEntityItem.TAG_DROP_LIST, dropListNBT));
                     }
                 } catch (Exception ex) {
                     // 掉落列表构建失败不影响捕获本身
@@ -336,8 +336,10 @@ public class AnvilOrbProjectile extends ThrowableItemProjectile implements ItemS
                 new net.minecraft.world.level.storage.loot.LootContext.Builder(params)
                         .create(java.util.Optional.of(lootTableId.location()));
 
-        LootTable lootTable = context.getResolver()
-                .lookupOrThrow(Registries.LOOT_TABLE).getOrThrow(lootTableId).value();
+        // 安全取表：模组实体可能声明数据包中不存在的战利品表，缺失时视为无掉落，
+        // 避免 getOrThrow 抛出 IllegalStateException 崩掉服务器。
+        LootTable lootTable = com.zzq.survival_toolbox.util.LootTableHelper.resolveOrNull(context, lootTableId);
+        if (lootTable == null) return new ArrayList<>();
 
         List<ItemStack> result = new ArrayList<>();
         try {

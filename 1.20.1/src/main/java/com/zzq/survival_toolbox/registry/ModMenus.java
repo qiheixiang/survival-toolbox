@@ -21,6 +21,12 @@ public class ModMenus {
             DeferredRegister.create(ForgeRegistries.MENU_TYPES, SurvivalToolbox.MODID);
 
     /** 拆解台菜单 */
+    /** 交易机菜单 */
+    public static final RegistryObject<MenuType<net.minecraft.world.inventory.MerchantMenu>> TRADE_MACHINE =
+            MENUS.register("trade_machine",
+                    () -> IForgeMenuType.create((windowId, inv, data) ->
+                            new TradeMachineMenu(windowId, inv, new TradeMachineMenu.DummyMerchant(inv.player))));
+
     public static final RegistryObject<MenuType<DisassembleMenu>> DISASSEMBLE =
             MENUS.register("disassemble",
                     () -> IForgeMenuType.create((windowId, inv, data) ->

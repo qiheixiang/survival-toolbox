@@ -153,7 +153,6 @@ public class OmniHopperScreen extends AbstractContainerScreen<OmniHopperMenu> {
             );
         }
 
-        renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         renderTooltip(guiGraphics, mouseX, mouseY);
     }

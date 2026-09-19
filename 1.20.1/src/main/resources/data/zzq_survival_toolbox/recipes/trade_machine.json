@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "SSS",
+    "SES",
+    "SSS"
+  ],
+  "key": {
+    "S": { "item": "minecraft:stick" },
+    "E": { "item": "minecraft:emerald_block" }
+  },
+  "result": {
+    "item": "zzq_survival_toolbox:trade_machine",
+    "count": 1
+  }
+}

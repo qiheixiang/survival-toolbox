@@ -31,7 +31,8 @@ public class ModCreativeTabs {
                     .icon(() -> new ItemStack(ModItems.ANVIL_ORB.get()))
                     .displayItems((parameters, output) -> {
                         // ---- 物品 ----
-                        output.accept(ModItems.ANVIL_ORB.get());
+                        output.accept(ModItems.TRADE_MACHINE.get());
+                output.accept(ModItems.ANVIL_ORB.get());
                         output.accept(ModItems.CAPTURED_ENTITY.get());
                         output.accept(ModItems.DISARM_STAFF.get());
                         output.accept(ModItems.TERRAIN_EDITOR.get());
@@ -40,6 +41,7 @@ public class ModCreativeTabs {
                         output.accept(ModItems.ENCHANTMENT_BAG.get());
                         output.accept(ModItems.XRAY_GOGGLES.get());
                         output.accept(ModItems.POCKET_DIMENSION.get());
+                        output.accept(ModItems.CREATIVE_PICKER.get());
 
                         // ---- 方块 ----
                         output.accept(ModBlocks.DISASSEMBLE_TABLE.get());

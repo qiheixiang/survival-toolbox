@@ -1,12 +1,16 @@
 package com.zzq.survival_toolbox.listener;
 
+import com.zzq.survival_toolbox.util.ItemNbt;
 import com.zzq.survival_toolbox.ModConfig;
 import com.zzq.survival_toolbox.registry.ModEnchantments;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
@@ -35,13 +39,37 @@ public class BloodthirstyEventHandler {
         return Component.translatable("enchantment.zzq_survival_toolbox.bloodthirsty").withStyle(color);
     }
 
+    /**
+     * 从伤害来源解析出实际攻击者。
+     * <p>
+     * 近战与箭矢的来源实体本就是攻击者；但部分模组枪械把子弹本身当作来源实体、
+     * 把射手挂在子弹的 owner 上，这里补一层兜底，保证枪械命中同样能吃到嗜血效果。
+     * </p>
+     *
+     * @param source 伤害来源
+     * @return 攻击者，无法确定时返回 {@code null}
+     */
+    private static LivingEntity attackerOf(DamageSource source) {
+        Entity entity = source.getEntity();
+        if (entity instanceof LivingEntity living) return living;
+        if (entity instanceof Projectile projectile && projectile.getOwner() instanceof LivingEntity owner) {
+            return owner;
+        }
+        Entity direct = source.getDirectEntity();
+        if (direct instanceof Projectile projectile && projectile.getOwner() instanceof LivingEntity owner) {
+            return owner;
+        }
+        return null;
+    }
+
     // ============================================================
     // 击杀：吸收攻击力
     // ============================================================
 
     @SubscribeEvent
     public static void onLivingDeath(LivingDeathEvent event) {
-        if (!(event.getSource().getEntity() instanceof LivingEntity killer)) return;
+        LivingEntity killer = attackerOf(event.getSource());
+        if (killer == null) return;
 
         ItemStack weapon = killer.getMainHandItem();
         if (weapon.isEmpty()) return;
@@ -58,7 +86,7 @@ public class BloodthirstyEventHandler {
         float healthToAdd = (float) (event.getEntity().getMaxHealth() * multiplier);
         float newBonus = (float) Math.min(currentBonus + healthToAdd, maxBonus);
         modData.putFloat("bloodthirsty_bonus", newBonus);
-        weapon.getOrCreateTag().put("zzq_survival_toolbox_data", modData);
+        ItemNbt.edit(weapon, t -> t.put("zzq_survival_toolbox_data", modData));
 
         if (ModConfig.CLIENT.enableKillMessage.get() && killer instanceof Player player) {
             player.sendSystemMessage(Component.translatable(
@@ -76,7 +104,8 @@ public class BloodthirstyEventHandler {
 
     @SubscribeEvent
     public static void onLivingDamage(LivingDamageEvent event) {
-        if (!(event.getSource().getEntity() instanceof LivingEntity attacker)) return;
+        LivingEntity attacker = attackerOf(event.getSource());
+        if (attacker == null) return;
 
         ItemStack weapon = attacker.getMainHandItem();
         if (weapon.isEmpty()) return;

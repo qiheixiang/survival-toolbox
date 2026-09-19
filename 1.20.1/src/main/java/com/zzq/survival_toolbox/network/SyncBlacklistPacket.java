@@ -1,7 +1,6 @@
 package com.zzq.survival_toolbox.network;
 
 import com.zzq.survival_toolbox.item.BlacklistItem;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
@@ -55,18 +54,8 @@ public class SyncBlacklistPacket {
             }
             // 客户端收到（来自服务端的同步）
             else {
-                Player player = Minecraft.getInstance().player;
-                if (player != null) {
-                    ItemStack newStack = msg.stack;
-                    ItemStack mainHand = player.getMainHandItem();
-                    ItemStack offHand = player.getOffhandItem();
-
-                    if (mainHand.getItem() instanceof BlacklistItem) {
-                        player.getInventory().setItem(player.getInventory().selected, newStack);
-                    } else if (offHand.getItem() instanceof BlacklistItem) {
-                        player.getInventory().offhand.set(0, newStack);
-                    }
-                }
+                // 走 client 包入口：本类会被专用服务器加载，这里不能出现客户端类型
+                com.zzq.survival_toolbox.client.ClientHooks.applyBlacklistSync(msg.stack);
             }
         });
         ctx.get().setPacketHandled(true);

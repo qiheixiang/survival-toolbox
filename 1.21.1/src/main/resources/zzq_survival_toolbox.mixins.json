@@ -3,7 +3,6 @@
   "minVersion": "0.8",
   "package": "com.zzq.survival_toolbox.mixin",
   "compatibilityLevel": "JAVA_21",
-  "refmap": "zzq_survival_toolbox.refmap.json",
   "mixins": [
     "LivingEntityMixin",
     "EntityMixin",
@@ -11,15 +10,22 @@
     "ItemEntityMixin",
     "InventoryMixin",
     "BlockBehaviourMixin",
-    "BlockStateBaseMixin"
+    "BlockStateBaseMixin",
+    "ItemExtensionMixin",
+    "MerchantMenuMixin",
+    "ServerGamePacketListenerImplMixin"
   ],
   "client": [
     "ModelBlockRendererMixin",
     "LevelRendererLightMixin",
     "ScreenEffectRendererMixin",
+    "MerchantScreenMixin",
+    "AbstractContainerScreenMixin",
     "BlockEntityRenderDispatcherMixin",
     "EmbeddiumLightMixin",
-    "VisualManagerMixin"
+    "VisualManagerMixin",
+    "MultiPlayerGameModeMixin",
+    "LsoThirstBlurMixin"
   ],
   "injectors": {
     "defaultRequire": 1

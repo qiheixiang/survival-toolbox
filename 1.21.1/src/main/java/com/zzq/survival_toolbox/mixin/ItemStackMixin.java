@@ -67,6 +67,8 @@ public abstract class ItemStackMixin {
                 remainingInt -= (int) shieldUsed;
             }
         }
+        // ② 受伤是关键时机：护盾刚被扣掉，立刻落盘
+        AdaptationHelper.flushPendingAdapt(user);
 
         // 3. 护盾完全吸收 → 取消原版扣耐久
         if (remainingInt <= 0) {

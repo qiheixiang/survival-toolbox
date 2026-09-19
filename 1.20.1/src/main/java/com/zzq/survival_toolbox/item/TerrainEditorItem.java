@@ -1,5 +1,6 @@
 package com.zzq.survival_toolbox.item;
 
+import com.zzq.survival_toolbox.util.ItemNbt;
 import com.zzq.survival_toolbox.SurvivalToolbox;
 import com.zzq.survival_toolbox.network.TerrainEditorOperationPacket;
 import com.zzq.survival_toolbox.screen.TerrainEditorMenu;
@@ -64,7 +65,7 @@ public class TerrainEditorItem extends Item {
     }
 
     public static void setRangeX(ItemStack stack, int v) {
-        stack.getOrCreateTag().putInt(KEY_RANGE_X, v);
+        ItemNbt.edit(stack, t -> t.putInt(KEY_RANGE_X, v));
     }
 
     public static int getRangeY(ItemStack stack) {
@@ -72,7 +73,7 @@ public class TerrainEditorItem extends Item {
     }
 
     public static void setRangeY(ItemStack stack, int v) {
-        stack.getOrCreateTag().putInt(KEY_RANGE_Y, v);
+        ItemNbt.edit(stack, t -> t.putInt(KEY_RANGE_Y, v));
     }
 
     public static int getRangeZ(ItemStack stack) {
@@ -80,7 +81,7 @@ public class TerrainEditorItem extends Item {
     }
 
     public static void setRangeZ(ItemStack stack, int v) {
-        stack.getOrCreateTag().putInt(KEY_RANGE_Z, v);
+        ItemNbt.edit(stack, t -> t.putInt(KEY_RANGE_Z, v));
     }
 
     public static int getOffsetX(ItemStack stack) {
@@ -88,7 +89,7 @@ public class TerrainEditorItem extends Item {
     }
 
     public static void setOffsetX(ItemStack stack, int v) {
-        stack.getOrCreateTag().putInt(KEY_OFFSET_X, v);
+        ItemNbt.edit(stack, t -> t.putInt(KEY_OFFSET_X, v));
     }
 
     public static int getOffsetY(ItemStack stack) {
@@ -96,7 +97,7 @@ public class TerrainEditorItem extends Item {
     }
 
     public static void setOffsetY(ItemStack stack, int v) {
-        stack.getOrCreateTag().putInt(KEY_OFFSET_Y, v);
+        ItemNbt.edit(stack, t -> t.putInt(KEY_OFFSET_Y, v));
     }
 
     public static int getOffsetZ(ItemStack stack) {
@@ -104,7 +105,7 @@ public class TerrainEditorItem extends Item {
     }
 
     public static void setOffsetZ(ItemStack stack, int v) {
-        stack.getOrCreateTag().putInt(KEY_OFFSET_Z, v);
+        ItemNbt.edit(stack, t -> t.putInt(KEY_OFFSET_Z, v));
     }
 
     public static boolean getShowRange(ItemStack stack) {
@@ -112,7 +113,7 @@ public class TerrainEditorItem extends Item {
     }
 
     public static void setShowRange(ItemStack stack, boolean v) {
-        stack.getOrCreateTag().putBoolean(KEY_SHOW_RANGE, v);
+        ItemNbt.edit(stack, t -> t.putBoolean(KEY_SHOW_RANGE, v));
     }
 
     public static boolean getBreakProtected(ItemStack stack) {
@@ -120,7 +121,7 @@ public class TerrainEditorItem extends Item {
     }
 
     public static void setBreakProtected(ItemStack stack, boolean v) {
-        stack.getOrCreateTag().putBoolean(KEY_BREAK_PROTECTED, v);
+        ItemNbt.edit(stack, t -> t.putBoolean(KEY_BREAK_PROTECTED, v));
     }
 
     public static int getMode(ItemStack stack) {
@@ -128,7 +129,7 @@ public class TerrainEditorItem extends Item {
     }
 
     public static void setMode(ItemStack stack, int v) {
-        stack.getOrCreateTag().putInt(KEY_MODE, v);
+        ItemNbt.edit(stack, t -> t.putInt(KEY_MODE, v));
     }
 
     public static ItemStack getPlaceBlock(ItemStack stack) {
@@ -138,9 +139,9 @@ public class TerrainEditorItem extends Item {
 
     public static void setPlaceBlock(ItemStack stack, ItemStack place) {
         if (place.isEmpty()) {
-            stack.getOrCreateTag().remove(KEY_PLACE_BLOCK);
+            ItemNbt.edit(stack, t -> t.remove(KEY_PLACE_BLOCK));
         } else {
-            stack.getOrCreateTag().put(KEY_PLACE_BLOCK, place.save(new CompoundTag()));
+            ItemNbt.edit(stack, t -> t.put(KEY_PLACE_BLOCK, place.save(new CompoundTag())));
         }
     }
 

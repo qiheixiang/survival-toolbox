@@ -11,7 +11,9 @@
     "ItemEntityMixin",
     "InventoryMixin",
     "BlockBehaviourMixin",
-    "BlockStateBaseMixin"
+    "BlockStateBaseMixin",
+    "MerchantMenuMixin",
+    "ServerGamePacketListenerImplMixin"
   ],
   "client": [
     "LivingEntityMixin",
@@ -24,10 +26,13 @@
     "ModelBlockRendererMixin",
     "LevelRendererLightMixin",
     "AbstractContainerScreenMixin",
+    "MerchantScreenMixin",
     "ScreenEffectRendererMixin",
     "BlockEntityRenderDispatcherMixin",
     "EmbeddiumLightMixin",
-    "VisualManagerMixin"
+    "VisualManagerMixin",
+    "MultiPlayerGameModeMixin",
+    "LsoThirstBlurMixin"
   ],
   "injectors": {
     "defaultRequire": 1

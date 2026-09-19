@@ -178,7 +178,6 @@ public class DisassembleScreen extends AbstractContainerScreen<DisassembleMenu> 
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         btnOneClickDisassemble.visible = menu.isButtonMode;
 
-        this.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         this.renderTooltip(guiGraphics, mouseX, mouseY);
 

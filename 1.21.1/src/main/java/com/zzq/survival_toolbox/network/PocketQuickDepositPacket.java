@@ -61,12 +61,13 @@ public record PocketQuickDepositPacket(int mode, int slotIndex) implements Custo
                     for (int i = 9; i < inv.items.size(); i++) {
                         ItemStack stack = inv.getItem(i);
                         if (stack.isEmpty()) continue;
-                        long after = PocketStorageHelper.quickDeposit(bag, stack.copy(), player.level().registryAccess());
-                        if (after <= 0) {
+                        int moved = depositVerified(player, bag, stack);
+                        if (moved <= 0) continue;                       // 一个都没进去：原样留着，绝不凭空删玩家的东西
+                        if (moved >= stack.getCount()) {
                             inv.setItem(i, ItemStack.EMPTY);
                         } else {
                             ItemStack remain = stack.copy();
-                            remain.setCount((int) after);
+                            remain.setCount(stack.getCount() - moved);
                             inv.setItem(i, remain);
                         }
                     }
@@ -85,8 +86,8 @@ public record PocketQuickDepositPacket(int mode, int slotIndex) implements Custo
                     if (!slot.hasItem()) return;
                     ItemStack stack = slot.getItem();
                     if (stack.isEmpty()) return;
-                    long after = PocketStorageHelper.quickDeposit(bag, stack.copy(), player.level().registryAccess());
-                    applyRemainder(slot, stack, after);
+                    int moved = depositVerified(player, bag, stack);
+                    if (moved > 0) applyRemainder(slot, stack, stack.getCount() - moved);
                 } else if (payload.mode() == MODE_BAG_AT_SLOT) {
                     // 物品格上的袋 ← 鼠标上的物品
                     if (!slot.hasItem()) return;
@@ -94,13 +95,15 @@ public record PocketQuickDepositPacket(int mode, int slotIndex) implements Custo
                     if (!bag.is(ModItems.POCKET_DIMENSION.get())) return;
                     ItemStack target = menu.getCarried();
                     if (target.isEmpty()) return;
-                    long after = PocketStorageHelper.quickDeposit(bag, target.copy(), player.level().registryAccess());
-                    if (after <= 0) {
-                        menu.setCarried(ItemStack.EMPTY);
-                    } else {
-                        ItemStack remain = target.copy();
-                        remain.setCount((int) after);
-                        menu.setCarried(remain);
+                    int moved = depositVerified(player, bag, target);
+                    if (moved > 0) {
+                        if (moved >= target.getCount()) {
+                            menu.setCarried(ItemStack.EMPTY);
+                        } else {
+                            ItemStack remain = target.copy();
+                            remain.setCount(target.getCount() - moved);
+                            menu.setCarried(remain);
+                        }
                     }
                     slot.set(bag); // bag NBT 已更新，写回格子
                 }
@@ -108,6 +111,27 @@ public record PocketQuickDepositPacket(int mode, int slotIndex) implements Custo
                 // 吞掉异常防止中断流程
             }
         });
+    }
+
+    /**
+     * 把一件东西收进袋子，并<b>回读确认真的进去了</b>。
+     * <p>
+     * ⚠️⚠️ <b>绝不能拿 {@code quickDeposit} 的返回值当"成功"判据</b>（必须遵守的约束）：
+     * 它返回的是"还剩多少没装下"，而袋子容量无限、装不下会自动新建页，所以**恒为 0** ——
+     * 写入因为任何原因没落盘时它也照样返回 0。旧代码就是"返回 0 就把来源那一格清掉"，
+     * 一旦写入没落盘，玩家看到的就是<b>"右键一收，东西直接没了"</b>
+     * （"创造模式下右键收纳，创造口袋直接消失了"就是这一类）。
+     * 所以这里入库前后各数一次袋子里的数量，<b>只有真的多出来的那些</b>才从玩家身上扣。
+     * </p>
+     *
+     * @return 真正进了袋子的数量（0 = 一个都没进去，调用方必须原样留下）
+     */
+    private static int depositVerified(ServerPlayer player, ItemStack bag, ItemStack stack) {
+        long before = PocketStorageHelper.countInStorage(player, bag, stack, player.level().registryAccess());
+        PocketStorageHelper.quickDeposit(player, bag, stack.copy(), player.level().registryAccess());
+        long after = PocketStorageHelper.countInStorage(player, bag, stack, player.level().registryAccess());
+        long moved = after - before;
+        return moved <= 0 ? 0 : (int) Math.min(moved, stack.getCount());
     }
 
     private static void applyRemainder(Slot slot, ItemStack stack, long after) {

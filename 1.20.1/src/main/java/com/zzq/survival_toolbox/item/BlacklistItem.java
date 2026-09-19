@@ -1,5 +1,6 @@
 package com.zzq.survival_toolbox.item;
 
+import com.zzq.survival_toolbox.util.ItemNbt;
 import com.zzq.survival_toolbox.data.BlacklistEntry;
 import com.zzq.survival_toolbox.network.SyncBlacklistPacket;
 import com.zzq.survival_toolbox.screen.BlacklistMenu;
@@ -100,7 +101,7 @@ public class BlacklistItem extends Item {
         for (BlacklistEntry entry : entries) {
             listTag.add(entry.serializeNBT());
         }
-        stack.getOrCreateTag().put(TAG_ENTRIES, listTag);
+        ItemNbt.edit(stack, t -> t.put(TAG_ENTRIES, listTag));
     }
 
     // ----- 服务端操作 -----

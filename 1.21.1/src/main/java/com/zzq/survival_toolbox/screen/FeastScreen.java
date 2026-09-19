@@ -275,7 +275,6 @@ public class FeastScreen extends AbstractContainerScreen<FeastMenu> {
     public void render(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
         handleLongPress();
         updateButtons();
-        renderBackground(gui, mouseX, mouseY, partialTick);
         super.render(gui, mouseX, mouseY, partialTick);
         renderTooltip(gui, mouseX, mouseY);
     }

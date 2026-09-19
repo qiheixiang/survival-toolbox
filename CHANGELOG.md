@@ -1,5 +1,85 @@
 # Survival Toolbox 生存工具箱 — Changelog / 更新日志
 
+## 1.2.0
+
+### 一、新增功能 / New Features
+
+#### 1. 次元袋功能页（熔炼 / 铁砧 / 锻造台 / 工作台 / 拆解 / 切石机 / 磁铁 / 补货）
+界面右侧按钮条展开的功能面板，全部在主界面内完成，不需要离开次元袋。All-in-one panels opened from the right-hand button strip, without leaving the bag screen.
+
+- **熔炼页**：输入格 + 燃料格 + 产物格，规则沿用原版熔炉；可切换产物去处（放格子 / 直接进储物空间）；关闭界面后继续烧。Furnace panel with vanilla rules and an output destination toggle; keeps smelting while closed.
+- **铁砧页 / 锻造台页**：输入、材料与产物按原版排布，费用与产物全部由原版逻辑计算；铁砧页支持改名框（放上物品自动填入物品名）。Anvil / smithing panels driven by the vanilla implementations, including the rename box.
+- **工作台页 / 拆解页**：与拆解台共用同一套配方匹配与收费逻辑；拆解页支持「全部拆解」与变体翻页。Crafting / disassembly panels sharing the disassembly table's matching and cost rules.
+- **切石机页**：输入格 + 产物格 + 可滚动的可用配方列表，每次消耗一个输入。Stonecutter panel with a scrollable recipe list.
+- **磁铁页**：自动吸收附近的掉落物（开关、范围、名单、只吸已存有的模式）。Magnet panel that automatically collects nearby drops.
+- **补货页**：把玩家身上已有的堆叠从次元袋自动补齐（可限定只补快捷栏）。Restock panel that tops up the stacks you already carry.
+- **合成页「自动补充」开关**：取走产物后自动把消耗掉的材料从储物空间补回九宫格，只补袋子里真有的。Crafting panel's auto-refill toggle.
+
+#### 2. 次元袋存储与操作 / Storage & Interaction
+- **流体存储**：流体与物品在同一页的同一套网格里混排，数量以 mB 计（无上限），左键拿起/换位、右键用桶或任意流体容器存取；数字格式与机械动力统一（1000 mB = 1 B）。Fluids share the item grid, counted in mB with vanilla-bucket interaction; B/mB formatting matches Create.
+- **共享存储模式**：末影箱式——数据保存在服务器存档并按玩家存储，袋子只是入口；原有本地存储可一键并入共享空间（合并式，不覆盖）。Shared (ender-chest style) storage per player, with a one-way merge from local storage.
+- **托盘（出货工作台）**：把物品/流体交给容器，或从容器取回；支持朝世界放置一格流体。Tray for sending to / taking from containers, including placing one fluid cell into the world.
+- **快捷收纳扩展**：右键收纳后回读确认（写入未生效时不会清空物品栏）；创造模式背包界面同样可用。Quick deposit verifies the write before clearing the source, and works in the creative inventory screen.
+- **Shift 语义**：Shift+左键一律优先放进当前展开的功能页（含托盘），放不进才回背包；Shift+左键点产物格按材料批量取出。Shift-click prioritises the open panel and bulk-takes crafted products.
+- **长按提起整格**：界面内长按一格高亮后，点击其他位置完成整体交换（大堆叠换位）。Hold a slot to pick it up, then click another slot to swap whole stacks.
+- **整理四档**：按注册名 / 同模组归类 / 按数量 / 按标签排序，范围可选当前页或全部页。Four sort modes with per-page or all-pages scope.
+- **数量文字**：≤9999 精确显示，更大数值缩写为 千/万/亿/万亿/亿亿。Count text abbreviates large values.
+- **创造口袋**：新物品，右键打开创造模式物品栏，生存下也可取用（作弊级）。Creative Pocket item.
+
+#### 3. 交易机（Trade Machine）
+新物品：把村民的交易报价记录下来，随时查看并随身成交。A new item that records villager offers for later use.
+
+- Shift+右键村民/流浪商人记录报价（同一交易项只保留更实惠的那条），右键打开界面。Shift + right-click a villager to record offers; right-click to open.
+- 界面沿用原版村民交易界面，交易次数无上限，报价可按产物名称搜索。Vanilla trade UI with unlimited uses and a product search bar.
+
+#### 4. JEI 配方转移集成 / JEI Recipe Transfer
+配方界面右上角的「+」号可以直接把材料摆进次元袋。The "+" button can now fill the bag's panels.
+
+- **按当前打开的功能页匹配**：打开工作台页就填工作台九宫格，打开拆解页就填拆解九宫格；两个都没开时给一句提示、不摆放。Fills the panel you have open; asks you to open one otherwise.
+- **造型配方按位置摆放**：按配方外框对位（不会把 2×3 的门摆成 3×2 的活板门）。Shaped recipes keep their exact layout.
+- **材料不足时禁用「+」**：服务端用真实库存只读回答可转移性，未知一律不放行。The "+" is disabled when materials are truly insufficient.
+- **材料必须真的从袋子/背包取**：先扣除（并回读确认）再摆放，摆不进去则回滚，不会凭空生成物品。Materials are taken and verified before placement, with rollback.
+
+### 二、已有功能更新与修复 / Updates & Fixes to Existing Features
+
+#### 数据安全 / Data Safety
+- **写次元袋 NBT 不再就地修改标签**：此前与服务端每 tick 的网络编码线程争用同一份标签，会导致编码异常并使玩家掉线。Bag NBT writes now always copy before writing, fixing a disconnect caused by concurrent encoding.
+- **界面开着时不绕过容器缓存写存储**：修正托盘「纳入」、磁铁等路径绕过界面缓存、导致写入被旧缓存覆盖的问题。Storage writes always go through the open screen's cache.
+- **入库一律回读确认**：写入未真正生效时，物品留在原处（不消耗、不丢弃）。Every deposit is verified by reading the storage back.
+- **本地模式写入修复（1.20.1）**：页数据曾以错误的标签类型写入袋子，导致本地模式下存入的物品在重开界面后消失；已修复，并兼容读取历史数据以恢复既有内容。Fixes lost local-mode data on 1.20.1, with a compatible reader that recovers previously affected bags.
+
+#### 次元袋 / Pocket Dimension
+- **铁砧改名**：修正「放上物品不显示名称」与「输入名字后产物拿不出来」——后者由界面在点击产物时清空改名框、进而向服务端发送空名字引起。Anvil rename box now mirrors the input item, and taking the result no longer clears the name first.
+- **右键收纳**：改为回读确认后再清空来源格子，避免写入未生效时物品凭空消失。Quick deposit no longer clears the source before verifying the write.
+- **界面控件生命周期**：修正面板按钮在界面重新初始化（例如从 JEI 配方界面返回）后消失的问题。Panel buttons are rebuilt whenever the screen is re-initialised.
+- **合成材料「全有或全无」**：修正材料校验与消耗口径不一致导致的干消耗与无限产出。Crafting now consumes exactly what it validated.
+- **死亡处理**：开启「死亡不掉落」（keepInventory）时不再干扰物品栏。Respects keepInventory.
+- **搜索/重命名输入框**：聚焦时按键不再冒泡（按 E 不会关闭界面）。Typing in the search box no longer closes the screen.
+
+#### 拆解台 / Disassembly Table
+- **配方污染修复**：产物一律复制后再交出，避免修改配方自身的产物栈（曾导致其它模组的配方内容被改坏）。Recipe outputs are always copied before being handed out.
+- **缺中心/激活物品不再产出**：预览与消耗统一使用包含中心物品的完整材料清单。Preview and cost now use the same complete ingredient list.
+- **中心物品口径**：拆解时照常返还，并可在九宫格中逐个取用。Centre/activation items are returned and individually collectable.
+- **自定义配方放行**：锻造台、枪匠台（tacz）、无尽贪婪与诡厄巫法一类自定义配方可正常拆解。Custom recipe types are supported.
+- **切石机槽位错位**：修正槽位注册顺序与 id 常量不一致导致的物品错位。Fixed misaligned stonecutter slots.
+- **页码保持**：重算后停留在原来的配方页，不再跳回第一页。Keeps the current recipe page after recomputation.
+- **稳定与容错**：配方解析与界面处理全程捕获异常，单个配方异常不再导致崩溃。Per-recipe failures are isolated instead of crashing.
+
+#### 自适应附魔 / Adaptation
+- **线性叠层**：以未减伤的原始伤害为基准固定获得「伤害 × 比例」层数，本次减伤使用叠层前的层数。Linear stacking based on pre-mitigation damage.
+- **层数防护**：按配置的最大层数截断，NaN / 无穷 / 负数自动归零。Layer values are clamped and sanitised.
+- **屏幕效果与模糊**：新增配置项屏蔽失明/火焰/水雾/冰冻/传送门等屏幕效果；对低水分引起的屏幕模糊改为随适应进度逐步减弱，而不是直接抵消。Screen-effect suppression config, and thirst blur fades gradually as adaptation progresses.
+- **性能优化**：护盾值内存缓存、同步节流、护甲判定负缓存。Shield caching, sync throttling and negative caching for armour checks.
+
+#### 其它 / Others
+- **嗜血附魔**：可附于弓弩与模组枪械，伤害来源兜底解析弹射物归属。Applies to bows, crossbows and modded firearms.
+- **透视眼镜**：白名单改为每副眼镜独立（存于物品 NBT）；界面不再有额外的背景模糊。Per-item whitelist, no extra background blur.
+- **缴械法杖**：同时卸下饰品（Curios 兼容）。Also strips curios.
+- **镇魂灯 / 铁砧球**：战利品表缺失不再抛出异常导致服务器崩溃。Missing loot tables no longer crash the server.
+- **命令**：`/adapt` 与 `/bloodthirsty` 新增 `max` 子命令。New `max` subcommands.
+- **专用服务器**：主类与公共类不再引用客户端类型，专用服务器可正常启动。Dedicated servers start correctly.
+- **1.21.1 兼容**：修正数量文字注入点（1.21 已将格子绘制拆分为独立方法）导致的启动崩溃。Fixes a 1.21.1 startup crash.
+
 ## 1.1.0
 
 ### 一、新增功能 / New Features

@@ -69,6 +69,10 @@ public class ClientEventHandler {
     public static void onClientSetup(FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
             MenuScreens.register(ModMenus.DISASSEMBLE.get(), DisassembleScreen::new);
+            // 交易机的界面**就是原版村民界面**（MerchantMenu 把菜单类型写死成 MenuType.MERCHANT），
+            // 这个自建菜单类型客户端实际上永远收不到，就按原版界面注册；搜索框靠事件叠画。
+            MenuScreens.register(ModMenus.TRADE_MACHINE.get(),
+                    net.minecraft.client.gui.screens.inventory.MerchantScreen::new);
             MenuScreens.register(ModMenus.MICRO_FARM.get(), MicroFarmScreen::new);
             EntityRenderers.register(ModEntities.ANVIL_ORB.get(), AnvilOrbRenderer::new);
             BlockEntityRenderers.register(ModBlockEntities.MICRO_FARM.get(), MicroFarmRenderer::new);

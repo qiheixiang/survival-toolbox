@@ -18,6 +18,8 @@ public record PocketDimensionPageActionPacket(int action, int index, String name
     public static final int ACTION_REMOVE = 1;
     public static final int ACTION_RENAME = 2;
     public static final int ACTION_SET_PAGE = 3;
+    /** 切石机页：选中第 N 条配方（index）——客户端服务端都按"配方 id 排序"算同一份列表，所以传下标就够 */
+    public static final int ACTION_STONE_SELECT = 4;
 
     public static final Type<PocketDimensionPageActionPacket> TYPE =
             new Type<>(ResourceLocation.fromNamespaceAndPath("zzq_survival_toolbox", "pocket_page_action"));

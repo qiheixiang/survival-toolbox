@@ -10,7 +10,7 @@
       "item": "minecraft:glass"
     },
     "A": {
-      "item": "minecraft:anvil"
+      "tag": "minecraft:anvil"
     }
   },
   "result": {

@@ -14,6 +14,9 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.Collections;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 
@@ -92,6 +95,104 @@ public class AdaptationHelper {
     // 盔甲 NBT 数据读写（底层）
     // ============================================================
 
+    // ============================================================
+    // ② 护盾当前值的内存缓存：先攒着，低频/关键时机才写物品 NBT
+    // ============================================================
+    //
+    // 为什么 1.20.1 只做 ②（护盾）而没做 ④（适应计时）：
+    //   1.21.1 的暴露计时走 ItemNbt.edit（整份 CUSTOM_DATA 深拷贝 + 换组件）才需要攒着写；
+    //   1.20.1 的 getAdaptData 返回的就是物品里那份**实时标签**，累加是原地改，本身开销就很低，
+    //   再套一层缓存只会白白增加复杂度（这里刻意和 1.21.1 不一致）。
+    // 也没有 ③：1.20.1 没有专用的护盾同步包，护盾值是靠"写 NBT → 装备重同步"到客户端的，
+    //   所以落盘节奏必须保持"恢复中 2 tick 一次"，不然护盾条会变卡（见 AdaptationEventHandler）。
+    // ============================================================
+
+    /** 落盘间隔（tick）：静止时护盾值最多每秒写一次物品 NBT */
+    public static final int FLUSH_INTERVAL_TICKS = 20;
+    /** 待落盘条目数超过它时顺手清理很久没动过的 */
+    private static final int PENDING_SWEEP_SIZE = 64;
+    /** 多久没动过就算垃圾（毫秒）；清理时**先落盘再丢** */
+    private static final long PENDING_STALE_MS = 5000L;
+
+    /**
+     * 待落盘缓存：键是**物品栈本身**（IdentityHashMap，一件盔甲一个条目）。
+     * <p>
+     * ⚠️ 只由"写"创建（{@link #setArmorShield}），落盘后立刻清掉 —— 客户端那一边（只读）永远不会有条目，
+     * 所以它读到的始终是物品 NBT 里的真值，不会读到陈旧值。
+     * </p>
+     */
+    private static final Map<ItemStack, Pending> PENDING =
+            Collections.synchronizedMap(new IdentityHashMap<>());
+
+    private static final class Pending {
+        private float shieldCurrent;
+        private boolean hasShield;
+        private long touchedAt;
+    }
+
+    private static Pending pendingOf(ItemStack armor, boolean create) {
+        if (!create) return PENDING.get(armor);
+        Pending p = PENDING.get(armor);
+        if (p == null) {
+            if (PENDING.size() >= PENDING_SWEEP_SIZE) sweepPending();
+            p = new Pending();
+            PENDING.put(armor, p);
+        }
+        p.touchedAt = System.currentTimeMillis();
+        return p;
+    }
+
+    /** 清掉很久没动过的待落盘条目（先落盘，再丢） */
+    private static void sweepPending() {
+        long now = System.currentTimeMillis();
+        List<ItemStack> stale = new ArrayList<>();
+        synchronized (PENDING) {
+            for (Map.Entry<ItemStack, Pending> e : PENDING.entrySet()) {
+                if (now - e.getValue().touchedAt > PENDING_STALE_MS) stale.add(e.getKey());
+            }
+        }
+        for (ItemStack stack : stale) {
+            flushPendingAdapt(stack);
+        }
+    }
+
+    /**
+     * 把一件盔甲上攒着的护盾值写进物品 NBT。
+     * <p>
+     * 关键时机一定要调：受伤、换甲、丢甲、死亡复活、切维度、退出、服务器停。调完缓存就空了。
+     * </p>
+     */
+    public static void flushPendingAdapt(ItemStack armor) {
+        if (armor == null || armor.isEmpty()) return;
+        Pending p = PENDING.remove(armor);
+        if (p == null || !p.hasShield) return;
+        ItemNbt.edit(armor, t -> t.putFloat("adapt_shield_current", p.shieldCurrent));
+    }
+
+    /** 每 tick 调一次：到了落盘间隔才写 */
+    public static void flushPendingAdaptIfDue(ItemStack armor, int tickCount) {
+        if (tickCount % FLUSH_INTERVAL_TICKS == 0) flushPendingAdapt(armor);
+    }
+
+    /** 把某个实体身上所有自适应盔甲的护盾落盘 */
+    public static void flushPendingAdapt(LivingEntity entity) {
+        if (entity == null) return;
+        for (ItemStack armor : entity.getArmorSlots()) {
+            if (!armor.isEmpty()) flushPendingAdapt(armor);
+        }
+    }
+
+    /** 把所有待落盘数据落盘（服务器停 / 关卡卸载） */
+    public static void flushAllPendingAdapt() {
+        List<ItemStack> keys;
+        synchronized (PENDING) {
+            keys = new ArrayList<>(PENDING.keySet());
+        }
+        for (ItemStack stack : keys) {
+            flushPendingAdapt(stack);
+        }
+    }
+
     private static CompoundTag getAdaptData(ItemStack armor) {
         if (armor.isEmpty()) return new CompoundTag();
         CompoundTag tag = armor.getOrCreateTag();
@@ -120,7 +221,7 @@ public class AdaptationHelper {
         ListTag list = data.getList("adapted_effects", 8);
         list.add(StringTag.valueOf(effectId));
         data.put("adapted_effects", list);
-        armor.getOrCreateTag().put("adapt_data", data);
+        ItemNbt.edit(armor, t -> t.put("adapt_data", data));
     }
 
     public static boolean isEffectAdapted(ItemStack armor, String effectId) {
@@ -140,7 +241,7 @@ public class AdaptationHelper {
         CompoundTag timeMap = data.getCompound("effect_time");
         timeMap.putInt(effectId, timeMap.getInt(effectId) + ticks);
         data.put("effect_time", timeMap);
-        armor.getOrCreateTag().put("adapt_data", data);
+        ItemNbt.edit(armor, t -> t.put("adapt_data", data));
     }
 
     // ----- 火焰适应 -----
@@ -152,7 +253,7 @@ public class AdaptationHelper {
     public static void markFireAdapted(ItemStack armor) {
         CompoundTag data = getAdaptData(armor);
         data.putBoolean("fire_adapted", true);
-        armor.getOrCreateTag().put("adapt_data", data);
+        ItemNbt.edit(armor, t -> t.put("adapt_data", data));
     }
 
     public static int getFireExposureTime(ItemStack armor) {
@@ -162,7 +263,7 @@ public class AdaptationHelper {
     public static void addFireExposureTime(ItemStack armor, int ticks) {
         CompoundTag data = getAdaptData(armor);
         data.putInt("fire_exposure_time", data.getInt("fire_exposure_time") + ticks);
-        armor.getOrCreateTag().put("adapt_data", data);
+        ItemNbt.edit(armor, t -> t.put("adapt_data", data));
     }
 
     // ----- 夜间适应 -----
@@ -174,7 +275,7 @@ public class AdaptationHelper {
     public static void markNightAdapted(ItemStack armor) {
         CompoundTag data = getAdaptData(armor);
         data.putBoolean("night_adapted", true);
-        armor.getOrCreateTag().put("adapt_data", data);
+        ItemNbt.edit(armor, t -> t.put("adapt_data", data));
     }
 
     public static int getNightExposureTime(ItemStack armor) {
@@ -184,7 +285,7 @@ public class AdaptationHelper {
     public static void addNightExposureTime(ItemStack armor, int ticks) {
         CompoundTag data = getAdaptData(armor);
         data.putInt("night_exposure_time", data.getInt("night_exposure_time") + ticks);
-        armor.getOrCreateTag().put("adapt_data", data);
+        ItemNbt.edit(armor, t -> t.put("adapt_data", data));
     }
 
     // ----- 迷雾适应 -----
@@ -196,7 +297,7 @@ public class AdaptationHelper {
     public static void markFogAdapted(ItemStack armor) {
         CompoundTag data = getAdaptData(armor);
         data.putBoolean("fog_adapted", true);
-        armor.getOrCreateTag().put("adapt_data", data);
+        ItemNbt.edit(armor, t -> t.put("adapt_data", data));
     }
 
     public static int getFogExposureTime(ItemStack armor) {
@@ -206,7 +307,66 @@ public class AdaptationHelper {
     public static void addFogExposureTime(ItemStack armor, int ticks) {
         CompoundTag data = getAdaptData(armor);
         data.putInt("fog_exposure_time", data.getInt("fog_exposure_time") + ticks);
-        armor.getOrCreateTag().put("adapt_data", data);
+        ItemNbt.edit(armor, t -> t.put("adapt_data", data));
+    }
+
+    // ----- 口渴模糊适应（LSO 低水分时糊屏的那个后处理，见 LsoThirstBlurMixin）-----
+
+    /**
+     * 统一适应系统的阈值（tick）：{@code max(1, adaptTime - 层数 × adaptTimeReduction) × 20}。
+     * <p>
+     * ⚠️ 服务端拿它累计暴露时间、客户端拿它算"适应进度"，**两边必须是同一个公式**，
+     * 否则玩家看到的"逐步变淡"和服务端认定的"适应完成"对不上。
+     * </p>
+     */
+    public static int adaptThresholdTicks(LivingEntity entity) {
+        int baseSeconds = ModConfig.CLIENT.adaptTime.get();
+        double reduction = ModConfig.CLIENT.adaptTimeReduction.get();
+        double thresholdSeconds = Math.max(1.0D, baseSeconds - getTotalLayers(entity) * reduction);
+        return (int) (thresholdSeconds * 20.0D);
+    }
+
+    public static boolean isThirstBlurAdapted(ItemStack armor) {
+        return getAdaptData(armor).getBoolean("thirst_blur_adapted");
+    }
+
+    public static void markThirstBlurAdapted(ItemStack armor) {
+        CompoundTag data = getAdaptData(armor);
+        data.putBoolean("thirst_blur_adapted", true);
+        ItemNbt.edit(armor, t -> t.put("adapt_data", data));
+    }
+
+    public static int getThirstBlurExposureTime(ItemStack armor) {
+        return getAdaptData(armor).getInt("thirst_blur_exposure_time");
+    }
+
+    public static void addThirstBlurExposureTime(ItemStack armor, int ticks) {
+        CompoundTag data = getAdaptData(armor);
+        data.putInt("thirst_blur_exposure_time", data.getInt("thirst_blur_exposure_time") + ticks);
+        ItemNbt.edit(armor, t -> t.put("adapt_data", data));
+    }
+
+    /**
+     * 口渴模糊的<b>适应进度</b>（0 = 完全没适应，1 = 已完成适应）。
+     * <p>
+     * 设计规则：<b>不做"有盔甲就直接抵消"，而是逐步适应</b> ——
+     * 所以客户端的 {@code LsoThirstBlurMixin} 不做"有盔甲就归零"，而是按这个进度
+     * 把 LSO 算出来的模糊强度**线性压下去**：刚穿上时照糊，适应到一半时糊一半，
+     * 攒满适应时间（和火焰/夜视/迷雾一个阈值）才完全不糊。
+     * </p>
+     *
+     * @param thresholdTicks 服务端累计用的那个阈值（见 {@link #adaptThresholdTicks}）
+     */
+    public static float getThirstBlurAdaptProgress(LivingEntity entity, int thresholdTicks) {
+        List<ItemStack> armors = getAdaptationArmors(entity);
+        if (armors.isEmpty()) return 0.0F;
+        for (ItemStack armor : armors) {
+            if (isThirstBlurAdapted(armor)) return 1.0F;      // 已经适应完了：完全不糊
+        }
+        if (thresholdTicks <= 0) return 0.0F;
+        int exposure = getThirstBlurExposureTime(armors.get(0));
+        if (exposure <= 0) return 0.0F;                        // 刚穿上、还没开始适应：照糊
+        return Math.min(1.0F, (float) exposure / (float) thresholdTicks);
     }
 
     // ============================================================
@@ -238,7 +398,7 @@ public class AdaptationHelper {
 
     public static void setArmorLayers(ItemStack armor, float layers) {
         if (armor.isEmpty()) return;
-        armor.getOrCreateTag().putFloat("adapt_layers", safeRound3Decimals(layers));
+        ItemNbt.edit(armor, t -> t.putFloat("adapt_layers", safeRound3Decimals(layers)));
     }
 
     public static void addArmorLayers(ItemStack armor, double amount) {
@@ -263,13 +423,28 @@ public class AdaptationHelper {
 
     public static float getArmorShield(ItemStack armor) {
         if (armor.isEmpty()) return 0;
+        Pending p = pendingOf(armor, false);
+        if (p != null && p.hasShield) return p.shieldCurrent;
         return armor.getOrCreateTag().getFloat("adapt_shield_current");
     }
 
+    /**
+     * ② 护盾当前值只写内存。
+     * <p>
+     * 以前每 tick 一次 {@code ItemNbt.edit}（整份标签深拷贝 + 换组件 → 触发装备重同步），
+     * 自适应甲多的时候是最大的一笔开销。现在攒在 {@link #PENDING} 里，
+     * 由 {@link AdaptationEventHandler} 按"恢复中 2 tick / 静止 20 tick"的节奏落盘，
+     * 关键时机（受伤、换甲、复活、切维度、停机）立刻落盘 —— 客户端刷新率与以前一致。
+     * </p>
+     */
     public static void setArmorShield(ItemStack armor, float value) {
         if (armor.isEmpty()) return;
         float max = getArmorMaxShield(armor);
-        armor.getOrCreateTag().putFloat("adapt_shield_current", Math.max(0, Math.min(value, max)));
+        float clamped = Math.max(0, Math.min(value, max));
+        Pending p = pendingOf(armor, true);
+        if (p.hasShield && p.shieldCurrent == clamped) return;
+        p.shieldCurrent = clamped;
+        p.hasShield = true;
     }
 
     public static float getArmorMaxShield(ItemStack armor) {
@@ -288,7 +463,7 @@ public class AdaptationHelper {
         if (current > max) {
             setArmorShield(armor, max);
         }
-        armor.getOrCreateTag().putFloat("adapt_shield_max", max);
+        ItemNbt.edit(armor, t -> t.putFloat("adapt_shield_max", max));
     }
 
     // ============================================================
@@ -311,15 +486,25 @@ public class AdaptationHelper {
         if (armors.isEmpty()) return;
 
         double gainMultiplier = ModConfig.CLIENT.adaptLayerGainMultiplier.get();
+        double maxLayers = ModConfig.CLIENT.adaptMaxLayers.get();
 
         for (ItemStack armor : armors) {
             float currentLayers = getArmorLayers(armor);
             if (rawDamage > currentLayers) {
-                double gain = (rawDamage - currentLayers) * gainMultiplier;
-                if (gain > 0 && gain < 0.001f) gain = 0.001f;
+                // 线性叠层：以本次"未减伤的原始伤害"为基准，固定获得 伤害 × 获取比例 层。
+                // 不再按（伤害 − 层数）收敛，因此任意量级（含科学计数法）都能稳定增长：
+                // 增益恒为伤害的固定比例（默认 1%），远大于 float 在该量级下的最小步进，
+                // 约 100 击即可追平并超过该档伤害而达成免疫。
+                double gain = rawDamage * gainMultiplier;
+                if (gain > 0 && gain < 0.001) gain = 0.001;
                 float safeGain = safeRound3Decimals((float) gain);
-                float newLayers = currentLayers + safeGain;
-                setArmorLayers(armor, newLayers);
+                // 与 addArmorLayers 保持一致：按配置的「最大层数」截断，
+                // 并防护 NaN/Infinity/负数，避免异常数值导致数据损坏后无法恢复。
+                double newLayers = Math.min(currentLayers + (double) safeGain, maxLayers);
+                if (Double.isNaN(newLayers) || Double.isInfinite(newLayers) || newLayers < 0) {
+                    newLayers = 0;
+                }
+                setArmorLayers(armor, (float) newLayers);
 
                 if (entity instanceof Player player) {
                     updateFlightAbility(entity);

@@ -17,6 +17,10 @@ public class ModItems {
             DeferredRegister.create(ForgeRegistries.ITEMS, "zzq_survival_toolbox");
 
     /** 铁砧球物品 */
+    /** 交易机（手机外观：右键开交易菜单，shift+右键村民记录报价） */
+    public static final RegistryObject<Item> TRADE_MACHINE =
+            ITEMS.register("trade_machine", TradeMachineItem::new);
+
     public static final RegistryObject<Item> ANVIL_ORB =
             ITEMS.register("anvil_orb", AnvilOrbItem::new);
 
@@ -51,6 +55,10 @@ public class ModItems {
     /** 随身次元袋（按类型合并的无限存储） */
     public static final RegistryObject<Item> POCKET_DIMENSION =
             ITEMS.register("pocket_dimension", PocketDimensionItem::new);
+
+    /** 创造口袋（右键打开创造模式物品栏；生存也能真的取物，配方 = 9 个拆解台） */
+    public static final RegistryObject<Item> CREATIVE_PICKER =
+            ITEMS.register("creative_picker", com.zzq.survival_toolbox.item.CreativePickerItem::new);
 
     /**
      * 空方法，仅用于触发类加载和注册

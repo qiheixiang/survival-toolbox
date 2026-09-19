@@ -1,5 +1,7 @@
 package com.zzq.survival_toolbox.screen;
 
+import com.zzq.survival_toolbox.util.AdaptationHelper;
+import com.zzq.survival_toolbox.util.ItemNbt;
 import com.zzq.survival_toolbox.block.entity.EnchantmentTransferBlockEntity;
 import com.zzq.survival_toolbox.registry.ModBlocks;
 import com.zzq.survival_toolbox.registry.ModMenus;
@@ -211,14 +213,14 @@ public class EnchantmentTransferMenu extends AbstractContainerMenu {
             CompoundTag modData = stack.getOrCreateTag().getCompound("zzq_survival_toolbox_data");
             modData.remove("bloodthirsty_bonus");
             if (modData.isEmpty()) {
-                stack.getOrCreateTag().remove("zzq_survival_toolbox_data");
+                ItemNbt.edit(stack, t -> t.remove("zzq_survival_toolbox_data"));
             } else {
-                stack.getOrCreateTag().put("zzq_survival_toolbox_data", modData);
+                ItemNbt.edit(stack, t -> t.put("zzq_survival_toolbox_data", modData));
             }
         } else {
             CompoundTag modData = stack.getOrCreateTag().getCompound("zzq_survival_toolbox_data");
             modData.putFloat("bloodthirsty_bonus", bonus);
-            stack.getOrCreateTag().put("zzq_survival_toolbox_data", modData);
+            ItemNbt.edit(stack, t -> t.put("zzq_survival_toolbox_data", modData));
         }
     }
 
@@ -227,6 +229,9 @@ public class EnchantmentTransferMenu extends AbstractContainerMenu {
     // ============================================================
 
     private void swapAdaptationData(ItemStack a, ItemStack b) {
+        // ② 这里直接读写物品 NBT：先把两件甲上攒着的护盾落盘，免得交换到的是旧值
+        AdaptationHelper.flushPendingAdapt(a);
+        AdaptationHelper.flushPendingAdapt(b);
         float layersA = getAdaptationLayers(a);
         float layersB = getAdaptationLayers(b);
         float shieldA = getAdaptationShield(a);
@@ -263,9 +268,9 @@ public class EnchantmentTransferMenu extends AbstractContainerMenu {
 
     private void setAdaptationLayers(ItemStack stack, float layers) {
         if (layers <= 0) {
-            stack.getOrCreateTag().remove("adapt_layers");
+            ItemNbt.edit(stack, t -> t.remove("adapt_layers"));
         } else {
-            stack.getOrCreateTag().putFloat("adapt_layers", layers);
+            ItemNbt.edit(stack, t -> t.putFloat("adapt_layers", layers));
         }
     }
 
@@ -275,9 +280,9 @@ public class EnchantmentTransferMenu extends AbstractContainerMenu {
 
     private void setAdaptationShield(ItemStack stack, float shield) {
         if (shield <= 0) {
-            stack.getOrCreateTag().remove("adapt_shield_current");
+            ItemNbt.edit(stack, t -> t.remove("adapt_shield_current"));
         } else {
-            stack.getOrCreateTag().putFloat("adapt_shield_current", shield);
+            ItemNbt.edit(stack, t -> t.putFloat("adapt_shield_current", shield));
         }
     }
 
@@ -287,9 +292,9 @@ public class EnchantmentTransferMenu extends AbstractContainerMenu {
 
     private void setAdaptationMaxShield(ItemStack stack, float max) {
         if (max <= 0) {
-            stack.getOrCreateTag().remove("adapt_shield_max");
+            ItemNbt.edit(stack, t -> t.remove("adapt_shield_max"));
         } else {
-            stack.getOrCreateTag().putFloat("adapt_shield_max", max);
+            ItemNbt.edit(stack, t -> t.putFloat("adapt_shield_max", max));
         }
     }
 
@@ -299,9 +304,9 @@ public class EnchantmentTransferMenu extends AbstractContainerMenu {
 
     private void setAdaptationData(ItemStack stack, CompoundTag data) {
         if (data.isEmpty()) {
-            stack.getOrCreateTag().remove("adapt_data");
+            ItemNbt.edit(stack, t -> t.remove("adapt_data"));
         } else {
-            stack.getOrCreateTag().put("adapt_data", data);
+            ItemNbt.edit(stack, t -> t.put("adapt_data", data));
         }
     }
 

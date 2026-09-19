@@ -40,15 +40,23 @@ public class XrayClientHandler {
                 XrayOreHelper.setActive(false);
                 if (mc.level != null) mc.levelRenderer.allChanged();
             }
+            XrayOreHelper.updateCurrent(net.minecraft.world.item.ItemStack.EMPTY);
             addedNightVision = false;
             lastMainHand = null;
             return;
         }
 
         Item cur = mc.player.getMainHandItem().getItem();
+        boolean holdingGoggles = cur == ModItems.XRAY_GOGGLES.get();
+
+        // 手持眼镜的白名单缓存刷新：换了一副眼镜、或在选择菜单里改了开关时返回 true
+        boolean listChanged = XrayOreHelper.updateCurrent(
+                holdingGoggles ? mc.player.getMainHandItem() : net.minecraft.world.item.ItemStack.EMPTY);
+
+        boolean recompiled = false;
         if (cur != lastMainHand) {
             lastMainHand = cur;
-            boolean active = cur == ModItems.XRAY_GOGGLES.get();
+            boolean active = holdingGoggles;
             if (active != XrayOreHelper.isActive()) {
                 if (active) {
                     applyXrayEffects(mc);
@@ -61,8 +69,15 @@ public class XrayClientHandler {
                     // 齿轮/轴/传送带/表盘 Visual 不会随区块重建而销毁，需手动 reset 使
                     // VisualManagerMixin 的拦截对开/关都生效。
                     resetFlywheelVisuals(mc);
+                    recompiled = true;
                 }
             }
+        }
+
+        // 同一副眼镜改了白名单：重编译区块让开关即时生效
+        if (listChanged && !recompiled && mc.level != null) {
+            mc.levelRenderer.allChanged();
+            resetFlywheelVisuals(mc);
         }
 
         // 死亡/重生等会清空效果：激活状态下夜视丢失则重新附加；

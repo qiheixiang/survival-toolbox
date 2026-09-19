@@ -20,7 +20,9 @@ import net.minecraft.world.item.ItemStack;
  * <ul>
  *   <li>{@code get} - 显示主手武器的嗜血攻击力加成</li>
  *   <li>{@code set &lt;bonus&gt;} - 设置主手武器的嗜血攻击力加成</li>
+ *   <li>{@code set max} - 直接设成配置里的最大加成（{@code ModConfig maxBonus}）</li>
  *   <li>{@code add &lt;bonus&gt;} - 增加主手武器的嗜血攻击力加成</li>
+ *   <li>{@code add max} - 直接加满（加完由上限兜底）</li>
  * </ul>
  * </p>
  */
@@ -33,11 +35,19 @@ public class BloodthirstyCommand {
                                 .executes(BloodthirstyCommand::getBonus)
                         )
                         .then(Commands.literal("set")
+                                // /bloodthirsty set max = 直接用配置里的最大加成
+                                .then(Commands.literal("max")
+                                        .executes(BloodthirstyCommand::setBonusMax)
+                                )
                                 .then(Commands.argument("bonus", FloatArgumentType.floatArg(0))
                                         .executes(BloodthirstyCommand::setBonus)
                                 )
                         )
                         .then(Commands.literal("add")
+                                // /bloodthirsty add max = 直接加满（仍由上限兜底）
+                                .then(Commands.literal("max")
+                                        .executes(BloodthirstyCommand::addBonusMax)
+                                )
                                 .then(Commands.argument("bonus", FloatArgumentType.floatArg())
                                         .executes(BloodthirstyCommand::addBonus)
                                 )
@@ -69,14 +79,22 @@ public class BloodthirstyCommand {
         return 1;
     }
 
+    /** {@code /bloodthirsty set max}：直接用配置里的最大加成（{@code ModConfig.CLIENT.maxBonus}） */
+    private static int setBonusMax(CommandContext<CommandSourceStack> ctx) {
+        return setBonusTo(ctx.getSource(), ModConfig.CLIENT.maxBonus.get().floatValue());
+    }
+
     private static int setBonus(CommandContext<CommandSourceStack> ctx) {
-        CommandSourceStack source = ctx.getSource();
+        return setBonusTo(ctx.getSource(), FloatArgumentType.getFloat(ctx, "bonus"));
+    }
+
+    /** set 的公共实现：普通数值和 max 走同一条路（超过上限同样会提示并调整） */
+    private static int setBonusTo(CommandSourceStack source, float value) {
         if (!(source.getEntity() instanceof Player player)) {
             source.sendFailure(Component.literal("只有玩家可以使用此命令"));
             return 0;
         }
 
-        float value = FloatArgumentType.getFloat(ctx, "bonus");
         ItemStack weapon = player.getMainHandItem();
 
         if (weapon.isEmpty()) {
@@ -102,14 +120,22 @@ public class BloodthirstyCommand {
         return 1;
     }
 
+    /** {@code /bloodthirsty add max}：直接加满（仍由配置上限兜底） */
+    private static int addBonusMax(CommandContext<CommandSourceStack> ctx) {
+        return addBonusTo(ctx.getSource(), ModConfig.CLIENT.maxBonus.get().floatValue());
+    }
+
     private static int addBonus(CommandContext<CommandSourceStack> ctx) {
-        CommandSourceStack source = ctx.getSource();
+        return addBonusTo(ctx.getSource(), FloatArgumentType.getFloat(ctx, "bonus"));
+    }
+
+    /** add 的公共实现 */
+    private static int addBonusTo(CommandSourceStack source, float addValue) {
         if (!(source.getEntity() instanceof Player player)) {
             source.sendFailure(Component.literal("只有玩家可以使用此命令"));
             return 0;
         }
 
-        float addValue = FloatArgumentType.getFloat(ctx, "bonus");
         ItemStack weapon = player.getMainHandItem();
 
         if (weapon.isEmpty()) {

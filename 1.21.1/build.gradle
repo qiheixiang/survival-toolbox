@@ -32,6 +32,10 @@ repositories {
     maven {
         url 'https://maven.neoforged.net/releases/'
     }
+    // JEI（BlameJared 仓库）：仅编译期依赖，运行时不打包、不强制
+    maven {
+        url 'https://maven.blamejared.com/'
+    }
 }
 
 base {
@@ -119,12 +123,12 @@ configurations {
 }
 
 dependencies {
-    // Example optional mod dependency with JEI
-    // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
-    // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"
-    // compileOnly "mezz.jei:jei-${mc_version}-neoforge-api:${jei_version}"
-    // We add the full version to localRuntime, not runtimeOnly, so that we do not publish a dependency on it
-    // localRuntime "mezz.jei:jei-${mc_version}-neoforge:${jei_version}"
+    // JEI：配方转移（"+"号）适配。只声明编译期 API，运行时不依赖、不打包——
+    // 整合包没装 JEI 时插件类不会被加载，模组照常工作。
+    compileOnly "mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"
+    compileOnly "mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}"
+    // 开发环境跑客户端想看 JEI 时启用（不影响发布产物）：
+    // localRuntime "mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}"
 
     // Example mod dependency using a mod jar from ./libs with a flat dir repository
     // This maps to ./libs/coolmod-${mc_version}-${coolmod_version}.jar
@@ -145,6 +149,9 @@ dependencies {
 // This block of code expands all declared replace properties in the specified resource targets.
 // A missing property will result in an error. Properties are expanded using ${} Groovy notation.
 var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
+    // ⚠️ 必须显式指 UTF-8：Groovy 的 expand 默认按**平台默认编码**写文件，
+    //    在中文 Windows（GBK）上会把 mod 名/描述写成 GBK 字节 → 游戏里显示乱码（历史问题）
+    filteringCharset = "UTF-8"
     var replaceProperties = [
             minecraft_version      : minecraft_version,
             minecraft_version_range: minecraft_version_range,

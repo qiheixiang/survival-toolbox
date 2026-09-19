@@ -457,7 +457,6 @@ public class AdaptationConfigScreen extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         guiGraphics.drawString(font,
                 Component.translatable("config.zzq_survival_toolbox.adaptation.title"),

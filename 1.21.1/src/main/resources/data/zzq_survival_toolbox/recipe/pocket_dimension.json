@@ -1,16 +1,37 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "LLL",
-    "LDL",
-    "LLL"
+    "ABC",
+    "HDI",
+    "EFG"
   ],
   "key": {
-    "L": {
-      "item": "minecraft:leather"
+    "A": {
+      "tag": "minecraft:anvil"
+    },
+    "B": {
+      "item": "minecraft:crafting_table"
+    },
+    "C": {
+      "item": "minecraft:smithing_table"
     },
     "D": {
       "item": "zzq_survival_toolbox:disassemble_table"
+    },
+    "E": {
+      "item": "minecraft:furnace"
+    },
+    "F": {
+      "item": "minecraft:bucket"
+    },
+    "H": {
+      "item": "minecraft:stonecutter"
+    },
+    "I": {
+      "item": "minecraft:hopper"
+    },
+    "G": {
+      "item": "minecraft:chest"
     }
   },
   "result": {

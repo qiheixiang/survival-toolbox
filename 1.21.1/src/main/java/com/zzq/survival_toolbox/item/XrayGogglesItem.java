@@ -31,11 +31,10 @@ public class XrayGogglesItem extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         // Shift+右键：打开矿透方块选择菜单（纯客户端界面，服务端不执行该分支）
+        // 传入 hand：菜单改的是"这一只手上那副眼镜"自己的列表（每副眼镜独立）
         if (level.isClientSide && player.isSecondaryUseActive()) {
-            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-            if (mc.player == player) {
-                mc.setScreen(new com.zzq.survival_toolbox.client.gui.XraySelectorScreen());
-            }
+            // 客户端行为走 client 包入口：本类会被专用服务器加载，这里不能出现客户端类型
+            com.zzq.survival_toolbox.client.ClientHooks.openXraySelector(player, hand);
             return InteractionResultHolder.sidedSuccess(stack, true);
         }
         return InteractionResultHolder.pass(stack);

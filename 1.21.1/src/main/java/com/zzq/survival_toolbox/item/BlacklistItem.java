@@ -98,7 +98,7 @@ public class BlacklistItem extends Item {
         for (BlacklistEntry entry : entries) {
             listTag.add(entry.serializeNBT());
         }
-        ItemNbt.getOrCreateTag(stack).put(TAG_ENTRIES, listTag);
+        ItemNbt.edit(stack, t -> t.put(TAG_ENTRIES, listTag));
     }
 
     // ----- 服务端操作 -----

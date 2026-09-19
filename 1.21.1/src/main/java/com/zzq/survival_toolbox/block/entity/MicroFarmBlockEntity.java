@@ -377,11 +377,10 @@ public class MicroFarmBlockEntity extends BaseContainerBlockEntity implements Me
                 new net.minecraft.world.level.storage.loot.LootContext.Builder(params)
                         .create(java.util.Optional.of(lootTableId.location()));
 
-        LootTable lootTable = context.getResolver()
-                .lookupOrThrow(Registries.LOOT_TABLE).getOrThrow(lootTableId).value();
-        if (lootTable == null) return Collections.emptyList();
-
-        return lootTable.getRandomItems(params);
+        // 安全取表：模组实体可能声明数据包中不存在的战利品表（如 Connector 环境下的
+        // MCA 村民 mca:entities/female_villager），此处缺失时跳过掉落产出，
+        // 绝不能抛出异常中断方块实体 tick（会导致服务器崩溃）。
+        return com.zzq.survival_toolbox.util.LootTableHelper.rollDropsOrEmpty(context, lootTableId, params);
     }
 
     // ============================================================

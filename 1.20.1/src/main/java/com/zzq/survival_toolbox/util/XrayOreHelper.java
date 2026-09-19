@@ -1,7 +1,11 @@
 package com.zzq.survival_toolbox.util;
 
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
@@ -11,14 +15,28 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 矿透辅助：手持透视眼镜时激活透视，白名单之外的方块不渲染。
+ * 矿透辅助：手持透视眼镜时激活透视，白名单之外（非矿石）的方块不渲染。
  * <p>
- * 白名单默认 = 原版全部矿物 + 自动识别的模组矿石（注册名以 {@code _ore} 结尾）。
- * 玩家可在护目镜 Shift+右键打开的选择菜单中手动开关任意方块（会话内生效）。
+ * <b>白名单按每副眼镜独立保存</b>（存在该物品自己的 NBT 中），互不影响。
+ * 存储采用"默认集 + 增删差分"，物品标签很小，且以后模组新增矿石会自动纳入默认集：
+ * <ul>
+ *   <li>{@code XrayAdded} —— 玩家额外开启的方块</li>
+ *   <li>{@code XrayRemoved} —— 玩家额外关闭的方块</li>
+ * </ul>
+ * 默认集 = 原版矿物 + 注册名以 {@code _ore} 结尾的模组矿石。
+ * 玩家可在护目镜 Shift+右键打开的选择菜单中手动开关任意方块。
+ * </p>
+ * <p>
  * 该类位于 common 包：服务端也会加载 mixin 类，激活状态仅由客户端事件设置，服务端恒为 false。
+ * 渲染热路径（{@link #isEnabled(BlockState)}）读取客户端缓存，不逐帧解析 NBT。
  * </p>
  */
 public class XrayOreHelper {
+
+    /** 玩家额外开启的方块（ListTag&lt;String&gt;） */
+    private static final String TAG_ADDED = "XrayAdded";
+    /** 玩家额外关闭的方块（ListTag&lt;String&gt;） */
+    private static final String TAG_REMOVED = "XrayRemoved";
 
     /** 原版矿物（含深板岩/下界变种、远古残骸、粗矿块），不依赖命名规则，作为回退保证识别 */
     private static final String[] BUILTIN_ORES = {
@@ -36,9 +54,14 @@ public class XrayOreHelper {
     };
 
     private static boolean active = false;
-    /** 白名单（矿透时保留渲染的方块），默认 = 原版矿物 + 自动识别的矿石 */
-    private static final Set<ResourceLocation> enabledBlocks = new HashSet<>();
-    private static boolean defaultsLoaded = false;
+
+    /** 默认白名单缓存（首次访问时构建；全注册表扫描一次即可） */
+    private static Set<ResourceLocation> cachedDefaults = null;
+
+    /** 客户端当前手持眼镜的有效白名单缓存（渲染热路径用） */
+    private static final Set<ResourceLocation> currentEnabled = new HashSet<>();
+    /** 缓存对应的物品标签，用于检测变化（变化时才重建缓存并重编译区块） */
+    private static CompoundTag currentTag = null;
 
     public static boolean isActive() {
         return active;
@@ -48,10 +71,103 @@ public class XrayOreHelper {
         active = value;
     }
 
-    /** 矿透白名单判断：该方块是否保留渲染 */
+    // ============================================================
+    // 每副眼镜独立的开关数据
+    // ============================================================
+
+    /** 默认白名单：原版矿物 + 注册名以 {@code _ore} 结尾的模组矿石 */
+    public static Set<ResourceLocation> defaults() {
+        if (cachedDefaults == null) {
+            Set<ResourceLocation> set = new HashSet<>();
+            for (String id : BUILTIN_ORES) {
+                ResourceLocation rl = ResourceLocation.tryParse(id);
+                if (rl != null) set.add(rl);
+            }
+            for (ResourceLocation id : BuiltInRegistries.BLOCK.keySet()) {
+                // 绝大多数模组矿石注册名形如 xxx_ore（含深层变体 xxx_deep_ore 等）
+                if (id.getPath().endsWith("_ore")) {
+                    set.add(id);
+                }
+            }
+            cachedDefaults = set;
+        }
+        return cachedDefaults;
+    }
+
+    /** 读取某副眼镜的有效白名单（默认集 ∪ 额外开启 − 额外关闭） */
+    public static Set<ResourceLocation> getEnabledBlocks(ItemStack goggles) {
+        Set<ResourceLocation> result = new HashSet<>(defaults());
+        CompoundTag tag = goggles.isEmpty() ? null : goggles.getTag();
+        if (tag == null) return result;
+        for (ResourceLocation id : readIds(tag, TAG_REMOVED)) result.remove(id);
+        for (ResourceLocation id : readIds(tag, TAG_ADDED)) result.add(id);
+        return result;
+    }
+
+    /** 某副眼镜是否开启该方块 */
+    public static boolean isEnabled(ItemStack goggles, ResourceLocation id) {
+        if (goggles.isEmpty() || !(goggles.getItem() instanceof com.zzq.survival_toolbox.item.XrayGogglesItem)) {
+            return false;
+        }
+        CompoundTag tag = goggles.getTag();
+        if (tag != null) {
+            if (readIds(tag, TAG_REMOVED).contains(id)) return false;
+            if (readIds(tag, TAG_ADDED).contains(id)) return true;
+        }
+        return defaults().contains(id);
+    }
+
+    /**
+     * 翻转某副眼镜上的某个方块（服务端执行，写回该物品自己的 NBT）。
+     *
+     * @return 翻转后该方块是否处于开启状态
+     */
+    public static boolean toggle(ItemStack goggles, ResourceLocation id) {
+        CompoundTag tag = goggles.getTag();
+        Set<ResourceLocation> added = new HashSet<>();
+        Set<ResourceLocation> removed = new HashSet<>();
+        if (tag != null) {
+            added.addAll(readIds(tag, TAG_ADDED));
+            removed.addAll(readIds(tag, TAG_REMOVED));
+        }
+        boolean enabled = defaults().contains(id) ? !removed.contains(id) : added.contains(id);
+        if (enabled) {
+            added.remove(id);
+            removed.add(id);
+        } else {
+            removed.remove(id);
+            added.add(id);
+        }
+        CompoundTag root = goggles.getOrCreateTag();
+        writeIds(root, TAG_ADDED, added);
+        writeIds(root, TAG_REMOVED, removed);
+        return !enabled;
+    }
+
+    // ============================================================
+    // 客户端渲染缓存
+    // ============================================================
+
+    /**
+     * 客户端每 tick 调用：把手持眼镜的白名单同步到渲染缓存。
+     *
+     * @return 白名单是否发生变化（变化时调用方应重编译区块）
+     */
+    public static boolean updateCurrent(ItemStack goggles) {
+        boolean hasGoggles = !goggles.isEmpty()
+                && goggles.getItem() instanceof com.zzq.survival_toolbox.item.XrayGogglesItem;
+        CompoundTag tag = hasGoggles ? goggles.getTag() : null;
+        if (tag == null && currentTag == null) return false;
+        if (tag != null && tag.equals(currentTag)) return false;
+        currentTag = tag == null ? null : tag.copy();
+        currentEnabled.clear();
+        if (hasGoggles) currentEnabled.addAll(getEnabledBlocks(goggles));
+        return true;
+    }
+
+    /** 矿透白名单判断（渲染热路径）：该方块是否保留渲染 */
     public static boolean isEnabled(BlockState state) {
-        ensureDefaults();
-        return enabledBlocks.contains(BuiltInRegistries.BLOCK.getKey(state.getBlock()));
+        return currentEnabled.contains(BuiltInRegistries.BLOCK.getKey(state.getBlock()));
     }
 
     // ============================================================
@@ -65,38 +181,28 @@ public class XrayOreHelper {
         return list;
     }
 
-    public static boolean isEnabled(ResourceLocation id) {
-        ensureDefaults();
-        return enabledBlocks.contains(id);
+    // ============================================================
+    // NBT 读写
+    // ============================================================
+
+    private static List<ResourceLocation> readIds(CompoundTag tag, String key) {
+        List<ResourceLocation> list = new ArrayList<>();
+        if (tag == null || !tag.contains(key, 9)) return list;
+        ListTag listTag = tag.getList(key, 8);
+        for (int i = 0; i < listTag.size(); i++) {
+            ResourceLocation rl = ResourceLocation.tryParse(listTag.getString(i));
+            if (rl != null) list.add(rl);
+        }
+        return list;
     }
 
-    /** 开关某个方块（菜单点击） */
-    public static void toggle(ResourceLocation id) {
-        ensureDefaults();
-        if (!enabledBlocks.remove(id)) {
-            enabledBlocks.add(id);
+    private static void writeIds(CompoundTag root, String key, Set<ResourceLocation> ids) {
+        if (ids.isEmpty()) {
+            root.remove(key);
+            return;
         }
-    }
-
-    /** 当前已开启的方块数量（菜单统计显示） */
-    public static int enabledCount() {
-        ensureDefaults();
-        return enabledBlocks.size();
-    }
-
-    /** 首次使用时构建默认白名单：原版矿物 + 注册名以 _ore 结尾的模组矿石 */
-    private static void ensureDefaults() {
-        if (defaultsLoaded) return;
-        defaultsLoaded = true;
-        for (String id : BUILTIN_ORES) {
-            ResourceLocation rl = ResourceLocation.tryParse(id);
-            if (rl != null) enabledBlocks.add(rl);
-        }
-        for (ResourceLocation id : BuiltInRegistries.BLOCK.keySet()) {
-            // 绝大多数模组矿石注册名形如 xxx_ore（含深层变体 xxx_deep_ore 等）
-            if (id.getPath().endsWith("_ore")) {
-                enabledBlocks.add(id);
-            }
-        }
+        ListTag list = new ListTag();
+        ids.stream().map(ResourceLocation::toString).sorted().forEach(s -> list.add(StringTag.valueOf(s)));
+        root.put(key, list);
     }
 }

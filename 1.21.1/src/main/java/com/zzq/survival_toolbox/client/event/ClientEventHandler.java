@@ -39,6 +39,10 @@ public class ClientEventHandler {
 
     @SubscribeEvent
     public static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
+        // 交易机的界面**就是原版村民界面**（MerchantMenu 把菜单类型写死成 MenuType.MERCHANT），
+        // 这个自建菜单类型客户端其实永远收不到，就按原版界面注册；搜索框靠事件叠画。
+        event.register(com.zzq.survival_toolbox.registry.ModMenus.TRADE_MACHINE.get(),
+                net.minecraft.client.gui.screens.inventory.MerchantScreen::new);
         event.register(ModMenus.DISASSEMBLE.get(), DisassembleScreen::new);
         event.register(ModMenus.MICRO_FARM.get(), MicroFarmScreen::new);
         event.register(ModMenus.TRANSMUTATION_FURNACE.get(), TransmutationFurnaceScreen::new);

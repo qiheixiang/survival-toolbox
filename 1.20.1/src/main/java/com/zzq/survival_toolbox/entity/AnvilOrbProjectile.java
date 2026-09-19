@@ -1,5 +1,6 @@
 package com.zzq.survival_toolbox.entity;
 
+import com.zzq.survival_toolbox.util.ItemNbt;
 import com.zzq.survival_toolbox.ModConfig;
 import com.zzq.survival_toolbox.item.CapturedEntityItem;
 import com.zzq.survival_toolbox.registry.ModEntities;
@@ -258,7 +259,7 @@ public class AnvilOrbProjectile extends ThrowableItemProjectile implements ItemS
                         preDeathHandChances, preDeathArmorChances
                 );
                 if (dropListNBT != null && !dropListNBT.isEmpty()) {
-                    capturedStack.getOrCreateTag().put(CapturedEntityItem.TAG_DROP_LIST, dropListNBT);
+                    ItemNbt.edit(capturedStack, t -> t.put(CapturedEntityItem.TAG_DROP_LIST, dropListNBT));
                 }
             }
 

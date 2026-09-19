@@ -42,6 +42,8 @@ public class DirectionConfigMenu extends AbstractContainerMenu {
     private final ContainerLevelAccess access;
     private final OmniHopperBlockEntity blockEntity;
     private final Player player;
+    /** 过滤名单格数（3×9） */
+    private static final int FILTER_SLOTS = 27;
     private final ItemStackHandler filterHandler;
 
     public DirectionConfigMenu(int id, Inventory inv, FriendlyByteBuf data) {
@@ -107,7 +109,18 @@ public class DirectionConfigMenu extends AbstractContainerMenu {
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
                 int slotIndex = row * 9 + col;
-                this.addSlot(new SlotItemHandler(filterHandler, slotIndex, 7 + col * 18, 74 + row * 18));
+                // 幽灵条目格：实物不允许放进名单，条目也取不出来（放/删都在 clicked 里处理）
+                this.addSlot(new SlotItemHandler(filterHandler, slotIndex, 7 + col * 18, 74 + row * 18) {
+                    @Override
+                    public boolean mayPlace(ItemStack stack) {
+                        return false;
+                    }
+
+                    @Override
+                    public boolean mayPickup(Player player) {
+                        return false;
+                    }
+                });
             }
         }
 
@@ -213,6 +226,34 @@ public class DirectionConfigMenu extends AbstractContainerMenu {
     @Override
     public boolean stillValid(@NotNull Player player) {
         return true;
+    }
+
+    /**
+     * 过滤名单格 = 幽灵条目
+     * <p>
+     * 左键：把光标上那件物品的<b>信息</b>复制进这一格（数量恒为 1），<b>光标上的实物原样不动</b>；
+     * 右键（或空手左键）：清掉这一格。
+     * 名单里放的不是实物，所以也不存在"把名单里的条目取出来"这种情况（格子 mayPickup 恒 false）。
+     * </p>
+     */
+    @Override
+    public void clicked(int slotId, int button, net.minecraft.world.inventory.ClickType clickType,
+                        Player player) {
+        if (player.level().isClientSide) return;
+        if (clickType == net.minecraft.world.inventory.ClickType.PICKUP
+                && slotId >= 0 && slotId < FILTER_SLOTS) {
+            ItemStack carried = getCarried();
+            if (button == 1 || carried.isEmpty()) {
+                this.filterHandler.setStackInSlot(slotId, ItemStack.EMPTY);
+            } else {
+                ItemStack ghost = carried.copy();
+                ghost.setCount(1);
+                this.filterHandler.setStackInSlot(slotId, ghost);
+            }
+            this.blockEntity.setChanged();
+            return;   // 不走原版路径：实物既不进名单格、也不会被拿走
+        }
+        super.clicked(slotId, button, clickType, player);
     }
 
     @Override

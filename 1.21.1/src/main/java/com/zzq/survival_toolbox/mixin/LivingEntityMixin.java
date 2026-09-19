@@ -44,19 +44,15 @@ public abstract class LivingEntityMixin {
         if (adaptArmors.isEmpty()) return amount;
 
         float originalAmount = amount;
+        // 本次减伤使用"叠层前"的层数：本次受击新增的层数不参与本次减伤
         float totalLayers = (float) AdaptationHelper.getTotalLayers(entity);
 
-        // 1. 层数增长：逐件独立判定（某件层数 < 伤害就给该件叠层），与总层数无关。
-        //    即使总层数足以完全抵挡伤害，单件层数低于伤害的盔甲仍会叠层。
-        AdaptationHelper.applyLayerGain(entity, originalAmount);
-        totalLayers = (float) AdaptationHelper.getTotalLayers(entity);
-
-        // 2. 层数减伤
+        // 1. 层数减伤（基于叠层前的层数）
         float reductionPerLayer = ModConfig.CLIENT.adaptLayerDamageReduction.get().floatValue();
         float layerAbsorb = Math.min(originalAmount, totalLayers * reductionPerLayer);
         float afterLayer = originalAmount - layerAbsorb;
 
-        // 3. 护盾吸收
+        // 2. 护盾吸收
         float remaining = afterLayer;
         for (ItemStack armor : adaptArmors) {
             float shield = AdaptationHelper.getArmorShield(armor);
@@ -65,15 +61,20 @@ public abstract class LivingEntityMixin {
             AdaptationHelper.setArmorShield(armor, shield - shieldUsed);
         }
 
-        // 4. 更新护盾上限
+        // 3. 更新护盾上限
         for (ItemStack armor : adaptArmors) {
             AdaptationHelper.updateArmorMaxShield(armor);
         }
+
+        // 4. 层数增长：以本次"未减伤的原始伤害"为基准，在减伤结算之后叠加
+        AdaptationHelper.applyLayerGain(entity, originalAmount);
 
         // 护盾被消耗后立即推送最新数据给客户端，让 HUD 及时反映
         if (entity instanceof Player player) {
             AdaptationHelper.syncAdaptationDataToClient(player);
         }
+        // ② 受伤是关键时机：护盾刚被扣掉，立刻落盘（否则崩服重启后护盾会回到未被消耗的值）
+        AdaptationHelper.flushPendingAdapt(entity);
 
         return remaining;
     }

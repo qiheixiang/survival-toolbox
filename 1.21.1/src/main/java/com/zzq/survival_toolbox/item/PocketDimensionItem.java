@@ -29,6 +29,22 @@ public class PocketDimensionItem extends Item {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
+        // 潜行 + 准星对着水/岩浆源：直接吸进袋子。
+        // 走这里是因为"对着开阔水面"时方块射线（不吃流体）什么都没打到，客户端发的是"使用物品"包，
+        // 不会走 PocketTrayInteractHandler 的 RightClickBlock；两条路都调同一个 scoopFluidSource。
+        // ⚠️ 只有托盘方向是**纳入**才吸水（判定规则：装液体跟托盘状态走）。
+        //    这条是"对着开阔水面、方块射线打空"时客户端发过来的使用物品包，之前漏了这个判断，
+        //    所以两个版本都出现过"不管托盘什么状态都能吸水"（历史问题）。
+        if (player.isShiftKeyDown() && !com.zzq.survival_toolbox.util.PocketTrayStorage.isOut(stack)) {
+            net.minecraft.core.BlockPos fluidPos =
+                    com.zzq.survival_toolbox.util.PocketTrayTransfer.fluidSourceInSight(player);
+            if (fluidPos != null) {
+                if (!level.isClientSide) {
+                    com.zzq.survival_toolbox.util.PocketTrayTransfer.scoopFluidSource(player, stack, level, fluidPos);
+                }
+                return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
+            }
+        }
         if (!level.isClientSide) {
             player.openMenu(new net.minecraft.world.SimpleMenuProvider(
                     (id, inv, p) -> new com.zzq.survival_toolbox.screen.PocketDimensionMenu(id, inv, stack),

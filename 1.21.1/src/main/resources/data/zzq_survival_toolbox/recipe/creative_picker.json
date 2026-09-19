@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "DDD",
+    "DDD",
+    "DDD"
+  ],
+  "key": {
+    "D": {
+      "item": "zzq_survival_toolbox:disassemble_table"
+    }
+  },
+  "result": {
+    "id": "zzq_survival_toolbox:creative_picker",
+    "count": 1
+  }
+}

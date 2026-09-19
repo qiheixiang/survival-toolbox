@@ -20,6 +20,13 @@ public class ModMenus {
     public static final DeferredRegister<MenuType<?>> MENUS =
             DeferredRegister.create(Registries.MENU, SurvivalToolbox.MODID);
 
+
+    /** 交易机菜单 */
+    public static final DeferredHolder<MenuType<?>, MenuType<net.minecraft.world.inventory.MerchantMenu>> TRADE_MACHINE =
+            MENUS.register("trade_machine",
+                    () -> IMenuTypeExtension.create((windowId, inv, data) ->
+                            new TradeMachineMenu(windowId, inv, new TradeMachineMenu.DummyMerchant(inv.player))));
+
     /** 拆解台菜单 */
     public static final DeferredHolder<MenuType<?>, MenuType<DisassembleMenu>> DISASSEMBLE =
             MENUS.register("disassemble",

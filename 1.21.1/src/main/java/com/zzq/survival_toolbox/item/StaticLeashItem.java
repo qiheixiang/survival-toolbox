@@ -207,7 +207,7 @@ public class StaticLeashItem extends Item {
             return true;
         }
 
-        // 未标记，但已被其他拴绳拴住 → 切换成我们的拴绳
+        // 未标记，但已被其他拴绳拴住 → 切换成本模组的拴绳
         if (mob.isLeashed()) {
             mob.setLeashedTo(null, true);
             mob.setLeashedTo(player, true);

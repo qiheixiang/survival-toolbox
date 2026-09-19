@@ -1,5 +1,6 @@
 package com.zzq.survival_toolbox.item;
 
+import com.zzq.survival_toolbox.util.ItemNbt;
 import com.zzq.survival_toolbox.client.renderer.CapturedEntityRenderer;
 import com.zzq.survival_toolbox.entity.CapturedEntityProjectile;
 import com.zzq.survival_toolbox.registry.ModItems;
@@ -122,7 +123,7 @@ public class CapturedEntityItem extends Item {
             entriesTag.add(entryTag);
         }
         dropListTag.put(TAG_DROP_ENTRIES, entriesTag);
-        stack.getOrCreateTag().put(TAG_DROP_LIST, dropListTag);
+        ItemNbt.edit(stack, t -> t.put(TAG_DROP_LIST, dropListTag));
     }
 
     public static List<DropEntry> getDropList(ItemStack stack) {

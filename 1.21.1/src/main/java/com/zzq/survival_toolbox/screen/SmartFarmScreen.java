@@ -430,7 +430,6 @@ public class SmartFarmScreen extends AbstractContainerScreen<SmartFarmMenu> {
             }
         }
 
-        this.renderBackground(gui, mouseX, mouseY, partialTick);
         super.render(gui, mouseX, mouseY, partialTick);
         this.renderTooltip(gui, mouseX, mouseY);
     }
