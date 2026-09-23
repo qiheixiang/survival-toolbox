@@ -14,8 +14,9 @@ import net.minecraft.world.entity.player.Inventory;
  */
 public class TemperingBoxScreen extends AbstractContainerScreen<TemperingBoxMenu> {
 
+    // 原版构造器：fromNamespaceAndPath 需要 Forge ≥ 47.3.19（见 SurvivalToolbox#CHANNEL）
     private static final ResourceLocation TEXTURE =
-            ResourceLocation.fromNamespaceAndPath("zzq_survival_toolbox", "textures/gui/tempering_box.png");
+            new ResourceLocation("zzq_survival_toolbox", "textures/gui/tempering_box.png");
 
     public TemperingBoxScreen(TemperingBoxMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);

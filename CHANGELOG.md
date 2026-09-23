@@ -1,5 +1,18 @@
 # Survival Toolbox 生存工具箱 — Changelog / 更新日志
 
+## 1.2.1（仅 1.20.1 / 1.20.1 only）
+
+### 修复 / Fixes
+
+- **修复在部分 1.20.1 整合包上启动即崩溃的问题。** 1.20.1 版本此前使用了 `ResourceLocation.parse(...)` 与 `ResourceLocation.fromNamespaceAndPath(...)`；这两个方法属于 1.21 的 API，Forge 直到 **47.3.19** 才将其向后移植到 1.20.1（Forge 更新日志："47.3.19 Backport some Vanilla 1.21 ResourceLocation methods (#10241)"）。在 Forge 版本低于 47.3.19 的整合包中，模组会在构造阶段抛出 `NoSuchMethodError: ResourceLocation.parse(String)`，导致游戏在加载界面崩溃。现已全部改为 1.20.1 原版的 `new ResourceLocation(...)` 构造器，可在全部 Forge 47.x 版本上运行。
+  Fixed a startup crash on 1.20.1 modpacks running a Forge version below 47.3.19. The 1.20.1 build used `ResourceLocation.parse(...)` / `ResourceLocation.fromNamespaceAndPath(...)`, which are 1.21 APIs that Forge only backported to 1.20.1 in 47.3.19. On older Forge releases the mod threw `NoSuchMethodError` while being constructed, crashing the game during loading. All call sites now use the vanilla `new ResourceLocation(...)` constructor, which exists in every Forge 47.x release.
+
+> 1.21.1 版本不受此问题影响（这两个方法本身就是 1.21 原版 API），无需更新。
+> The 1.21.1 build is unaffected by this issue and does not require an update.
+
+- **声明的 Forge 依赖下限修正为 47.1.12。** 此前 `mods.toml` 声明 `forge=[47,)`（即 47.0 起均可），但镇魂灯使用的 `PlayerSpawnPhantomsEvent` 自 Forge **47.1.12** 才提供（Forge 更新日志："47.1.12 Add PlayerSpawnPhantomsEvent (#9644)"）。声明范围比实际要求宽，会让过旧的 Forge 照常加载模组并在加载阶段出错；现在下限与实际要求一致，过旧的 Forge 会直接给出「依赖版本不满足」的提示而不是崩溃。
+  The declared Forge dependency floor is now 47.1.12, matching what the code actually requires (`PlayerSpawnPhantomsEvent` was added in Forge 47.1.12). Previously the range claimed support from 47.0, which let too-old loaders load the mod and fail during startup; now they report an unsatisfied dependency instead.
+
 ## 1.2.0
 
 ### 一、新增功能 / New Features

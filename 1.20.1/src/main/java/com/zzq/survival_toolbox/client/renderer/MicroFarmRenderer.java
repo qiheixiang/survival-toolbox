@@ -42,7 +42,8 @@ public class MicroFarmRenderer implements BlockEntityRenderer<MicroFarmBlockEnti
         CompoundTag entityNBT = CapturedEntityItem.getEntityNBT(entityStack);
         if (entityTypeId.isEmpty() || entityNBT == null) return;
 
-        EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(ResourceLocation.parse(entityTypeId));
+        // 原版构造器：ResourceLocation.parse 需要 Forge ≥ 47.3.19（见 SurvivalToolbox#CHANNEL）
+        EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(new ResourceLocation(entityTypeId));
         if (type == null) return;
 
         // ---- 创建临时实体 ----

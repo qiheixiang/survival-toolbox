@@ -81,8 +81,9 @@ public class CapturedEntityProjectile extends ThrowableItemProjectile {
             String entityTypeId = entityData.get(DATA_ENTITY_TYPE_ID);
             if (capturedNBT.isEmpty() || entityTypeId.isEmpty()) return;
 
+            // 原版构造器：ResourceLocation.parse 需要 Forge ≥ 47.3.19（见 SurvivalToolbox#CHANNEL）
             EntityType<?> entityType = ForgeRegistries.ENTITY_TYPES.getValue(
-                    ResourceLocation.parse(entityTypeId)
+                    new ResourceLocation(entityTypeId)
             );
             if (entityType == null) return;
 

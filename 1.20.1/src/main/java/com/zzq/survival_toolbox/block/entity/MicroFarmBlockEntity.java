@@ -333,7 +333,8 @@ public class MicroFarmBlockEntity extends BaseContainerBlockEntity implements Me
         if (nbt == null) return Collections.emptyList();
 
         String typeId = CapturedEntityItem.getEntityTypeId(entityStack);
-        EntityType<?> entityType = ForgeRegistries.ENTITY_TYPES.getValue(ResourceLocation.parse(typeId));
+        // 原版构造器：ResourceLocation.parse 需要 Forge ≥ 47.3.19（见 SurvivalToolbox#CHANNEL）
+        EntityType<?> entityType = ForgeRegistries.ENTITY_TYPES.getValue(new ResourceLocation(typeId));
         if (entityType == null) return Collections.emptyList();
 
         Entity entity = entityType.create(level);

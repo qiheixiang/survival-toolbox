@@ -32,7 +32,8 @@ public class CapturedEntityProjectileRenderer extends EntityRenderer<CapturedEnt
         String typeId = entity.getEntityTypeId();
         if (nbt == null || typeId.isEmpty()) return;
 
-        EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(ResourceLocation.parse(typeId));
+        // 原版构造器：ResourceLocation.parse 需要 Forge ≥ 47.3.19（见 SurvivalToolbox#CHANNEL）
+        EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(new ResourceLocation(typeId));
         if (type == null) return;
 
         Entity captured = type.create(entity.level());

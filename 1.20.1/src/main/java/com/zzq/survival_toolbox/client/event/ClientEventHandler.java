@@ -50,7 +50,8 @@ public class ClientEventHandler {
 
     @SubscribeEvent
     public static void onModelRegister(ModelEvent.RegisterAdditional event) {
-        event.register(ResourceLocation.fromNamespaceAndPath("zzq_survival_toolbox", "captured_entity"));
+        // 原版构造器：fromNamespaceAndPath 需要 Forge ≥ 47.3.19（见 SurvivalToolbox#CHANNEL）
+        event.register(new ResourceLocation("zzq_survival_toolbox", "captured_entity"));
     }
 
     @SubscribeEvent
@@ -61,7 +62,7 @@ public class ClientEventHandler {
     private static void registerCustomItemRenderer() {
         Item item = ModItems.CAPTURED_ENTITY.get();
         ItemProperties.register(item,
-                ResourceLocation.fromNamespaceAndPath("zzq_survival_toolbox", "captured_entity"),
+                new ResourceLocation("zzq_survival_toolbox", "captured_entity"),
                 (stack, level, entity, seed) -> 0);
     }
 

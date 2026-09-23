@@ -8,7 +8,7 @@ A Minecraft survival-enhancement mod featuring automated farming, item disassemb
 
 | 目录 | Minecraft | 加载器 | 最新版本 |
 |------|-----------|--------|---------|
-| [`1.20.1/`](1.20.1/) | 1.20.1 | Forge 47.x | 1.2.0 |
+| [`1.20.1/`](1.20.1/) | 1.20.1 | Forge 47.x | 1.2.1 |
 | [`1.21.1/`](1.21.1/) | 1.21.1 | NeoForge 21.1.x | 1.2.0 |
 
 详细更新内容见 [CHANGELOG.md](CHANGELOG.md)。

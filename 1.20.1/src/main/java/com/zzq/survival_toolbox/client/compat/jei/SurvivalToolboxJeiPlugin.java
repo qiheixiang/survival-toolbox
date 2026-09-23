@@ -49,7 +49,8 @@ public class SurvivalToolboxJeiPlugin implements IModPlugin {
 
     @Override
     public ResourceLocation getPluginUid() {
-        return ResourceLocation.parse(SurvivalToolbox.MODID + ":jei_plugin");
+        // 使用原版构造器：ResourceLocation.parse 需要 Forge ≥ 47.3.19，详见 SurvivalToolbox#CHANNEL
+        return new ResourceLocation(SurvivalToolbox.MODID + ":jei_plugin");
     }
 
     /**

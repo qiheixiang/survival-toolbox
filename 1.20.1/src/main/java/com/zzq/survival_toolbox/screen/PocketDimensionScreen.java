@@ -50,14 +50,15 @@ import java.util.List;
  */
 public class PocketDimensionScreen extends AbstractContainerScreen<PocketDimensionMenu> {
 
+    // 原版构造器：ResourceLocation.fromNamespaceAndPath 需要 Forge ≥ 47.3.19，详见 SurvivalToolbox#CHANNEL
     private static final ResourceLocation TEXTURE =
-            ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/container/generic_54.png");
+            new ResourceLocation("minecraft", "textures/gui/container/generic_54.png");
     /** 原版熔炉界面贴图：中间那团火（u=176,v=0,14×14）和进度箭头（u=176,v=14,24×16）都从这里取 */
     private static final ResourceLocation FURNACE_TEXTURE =
-            ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/container/furnace.png");
+            new ResourceLocation("minecraft", "textures/gui/container/furnace.png");
     /** 原版锻造台界面贴图：第一格（模板格）是"平的亮格"，和另外两格的凹槽不一样 */
     private static final ResourceLocation SMITHING_TEXTURE =
-            ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/container/smithing.png");
+            new ResourceLocation("minecraft", "textures/gui/container/smithing.png");
     private static final int FLAME_W = 14;
     private static final int FLAME_H = 14;
     private static final int ARROW_W = 24;
@@ -157,8 +158,8 @@ public class PocketDimensionScreen extends AbstractContainerScreen<PocketDimensi
     private long ghostTick;
     /** 模板格空着时轮换画的两个提示图标（原版 SmithingScreen 用的就是这两个，路径不带 textures/ 前缀与 .png） */
     private static final java.util.List<ResourceLocation> SMITHING_TEMPLATE_GHOSTS = java.util.List.of(
-            ResourceLocation.fromNamespaceAndPath("minecraft", "item/empty_slot_smithing_template_armor_trim"),
-            ResourceLocation.fromNamespaceAndPath("minecraft", "item/empty_slot_smithing_template_netherite_upgrade"));
+            new ResourceLocation("minecraft", "item/empty_slot_smithing_template_armor_trim"),
+            new ResourceLocation("minecraft", "item/empty_slot_smithing_template_netherite_upgrade"));
 
     /** 托盘页里的"送出/纳入"切换按钮（仅面板展开时存在） */
     private Button trayDirectionButton;
@@ -1945,7 +1946,7 @@ public class PocketDimensionScreen extends AbstractContainerScreen<PocketDimensi
 
     /** 1.20.1 的提示图标是普通贴图（textures/item/xxx.png），不是贴图集 sprite，所以这里要自己拼路径 */
     private void drawGhostIconSprite(GuiGraphics gui, int x, int y, ResourceLocation icon, float alpha) {
-        ResourceLocation texture = ResourceLocation.fromNamespaceAndPath(
+        ResourceLocation texture = new ResourceLocation(
                 icon.getNamespace(), "textures/" + icon.getPath() + ".png");
         gui.setColor(1.0F, 1.0F, 1.0F, alpha);
         gui.blit(texture, x, y, 0, 0, 16, 16, 16, 16);

@@ -50,9 +50,25 @@ public class SurvivalToolbox {
 
     /**
      * 网络通道：所有客户端↔服务端通信均通过此通道传输
+     * <p>
+     * 此处必须使用 1.20.1 原版的 {@code new ResourceLocation(String)} 构造器，不可写作
+     * {@code ResourceLocation.parse(...)} 或 {@code ResourceLocation.fromNamespaceAndPath(...)}：
+     * 这两个方法属于 1.21 的 API，Forge 直到 47.3.19 才将其向后移植到 1.20.1
+     * （Forge 更新日志："47.3.19 Backport some Vanilla 1.21 ResourceLocation methods (#10241)"）。
+     * 低于该版本的 Forge 在模组构造阶段会抛出
+     * {@code NoSuchMethodError: 'net.minecraft.resources.ResourceLocation net.minecraft.resources.ResourceLocation.parse(java.lang.String)'}，
+     * 导致游戏在加载阶段崩溃；而开发环境通常使用较新的 Forge（47.4.0），本地无法复现。
+     * 因此 1.20.1 侧代码只应使用在全部 Forge 47.x 版本中都存在的 API。
+     * </p>
+     * <p>
+     * ⚠️ 不要为了消除 {@code @Deprecated} 警告改回 {@code parse} / {@code fromNamespaceAndPath}：
+     * 较新的 Forge（47.4.0）会将 1.20.1 原版构造器标记为
+     * "deprecated, marked for removal" 并给出编译警告。该警告是刻意保留的——
+     * 兼容 47.1 至 47.4 的全部 Forge 版本优先于消除一条警告。
+     * </p>
      */
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
-            ResourceLocation.parse("zzq_survival_toolbox:main"),
+            new ResourceLocation("zzq_survival_toolbox:main"),
             () -> NETWORK_VERSION,
             version -> version.equals(NETWORK_VERSION),
             version -> version.equals(NETWORK_VERSION)
